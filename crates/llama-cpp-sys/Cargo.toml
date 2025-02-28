@@ -1,0 +1,16 @@
+[package]
+name = "llama-cpp-sys"
+version.workspace = true
+description = "This is a binding to the C-style interface of llama.cpp, generated with the help of the bindgen tool."
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+name = "llama_cpp_sys"
+path = "lib.rs"
+
+[build-dependencies]
+bindgen = "0.71.1"
+cc = { version = "1.2.16", features = ["parallel"] }
+cmake = "0.1.54"
