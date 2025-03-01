@@ -5,11 +5,10 @@ members = ["crates/*"]
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.85.0"
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
-log = "0.4"
+tracing = "0.1.41"
 anyhow = "1"
 
 [package]
@@ -18,5 +17,3 @@ version = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
-env_logger = "0.11"
-log = { workspace = true }

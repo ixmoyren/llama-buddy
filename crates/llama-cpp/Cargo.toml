@@ -1,0 +1,16 @@
+[package]
+name = "llama-cpp"
+version.workspace = true
+description = "Rust binding for llama.cpp"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+name = "llama_cpp"
+path = "src/lib.rs"
+
+[dependencies]
+llama-cpp-sys = { path = "../llama-cpp-sys" }
+tracing = { workspace = true }
+thiserror = "2"
