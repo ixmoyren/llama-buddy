@@ -1,5 +1,4 @@
 use crate::error::BackendError;
-use llama_cpp_sys::ggml_log_level;
 use std::sync::Once;
 use tracing::info;
 
@@ -50,7 +49,7 @@ impl Backend {
     /// 不输出日志
     pub fn void_logs(&mut self) {
         unsafe extern "C" fn void_log(
-            _level: ggml_log_level,
+            _level: llama_cpp_sys::ggml_log_level,
             _text: *const std::os::raw::c_char,
             _user_data: *mut std::os::raw::c_void,
         ) {
