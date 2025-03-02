@@ -11,9 +11,15 @@ pub struct Backend {
 static INITIALIZED_ONCE: Once = Once::new();
 
 impl Backend {
-    pub fn new() -> Backend {
-        Backend {
+    pub fn new() -> Self {
+        Self {
             ggml_numa_strategy: None,
+        }
+    }
+
+    pub fn new_with_ggml_numa_strategy(strategy: GgmlNumaStrategy) -> Self {
+        Self {
+            ggml_numa_strategy: Some(strategy),
         }
     }
 
