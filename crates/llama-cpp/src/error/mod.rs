@@ -1,0 +1,63 @@
+mod batch;
+mod cache;
+mod chat;
+mod context;
+mod lora;
+mod model;
+mod runtime;
+mod token;
+
+pub use batch::BatchAddError;
+pub use cache::KvCacheConversionError;
+pub use chat::ChatMessageError;
+pub use chat::ChatTemplateError;
+pub use context::DecodeError;
+pub use context::EmbeddingsError;
+pub use context::EncodeError;
+pub use context::LlamaContextLoadError;
+pub use lora::LlamaAdapterLoraInitError;
+pub use lora::LlamaAdapterLoraRemoveError;
+pub use lora::LlamaAdapterLoraSetError;
+pub use model::ApplyChatTemplateError;
+pub use model::LlamaModelLoadError;
+pub use model::StringConversionError;
+pub use model::TokenConversionError;
+pub use runtime::GgmlNumaStrategyError;
+use thiserror::Error;
+pub use token::TokenTypeConversionError;
+
+/// llama_cpp 全部的错误汇总
+#[derive(Debug, Eq, PartialEq, Error)]
+pub enum LLamaCppError {
+    /// 后端错误
+    #[error("{0}")]
+    GgmlNumaStrategy(#[from] GgmlNumaStrategyError),
+    #[error("{0}")]
+    ChatTemplate(#[from] ChatTemplateError),
+    #[error("{0}")]
+    ChatMessage(#[from] ChatMessageError),
+    #[error("{0}")]
+    TokenConversion(#[from] TokenConversionError),
+    #[error("{0}")]
+    StringConversion(#[from] StringConversionError),
+    #[error("{0}")]
+    TokenTypeConversion(#[from] TokenTypeConversionError),
+    #[error("{0}")]
+    ApplyChatTemplate(#[from] ApplyChatTemplateError),
+    #[error("{0}")]
+    LlamaModelLoad(#[from] LlamaModelLoadError),
+    #[error("{0}")]
+    LlamaAdapterLoraInit(#[from] LlamaAdapterLoraInitError),
+    #[error("{0}")]
+    LlamaContextLoad(#[from] LlamaContextLoadError),
+    #[error("{0}")]
+    BatchAdd(#[from] BatchAddError),
+    #[error("{0}")]
+    ContextDecode(#[from] DecodeError),
+    #[error("{0}")]
+    ContextEncode(#[from] EncodeError),
+    #[error("{0}")]
+    Embeddings(#[from] EmbeddingsError),
+    #[error("{0}")]
+    KvCacheConversion(#[from] KvCacheConversionError),
+}
