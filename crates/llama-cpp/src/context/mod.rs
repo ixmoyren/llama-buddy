@@ -71,7 +71,7 @@ impl Context {
 
         match NonZeroI32::new(result) {
             None => {
-                self.initialized_logits.clone_from_slice(&batch.logits());
+                self.initialized_logits.clone_from_slice(batch.logits());
                 Ok(())
             }
             Some(error) => Err(DecodeError::from(error)),
@@ -83,7 +83,7 @@ impl Context {
 
         match NonZeroI32::new(result) {
             None => {
-                self.initialized_logits.clone_from_slice(&batch.logits());
+                self.initialized_logits.clone_from_slice(batch.logits());
                 Ok(())
             }
             Some(error) => Err(EncodeError::from(error)),
