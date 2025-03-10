@@ -139,9 +139,7 @@ impl Model {
         let c_string = CString::new(str)?;
         let buffer_capacity = c_int::try_from(buffer.capacity()).map_err(|_| {
             StringConversionError::BufferCapacity(
-                "Buffer capacity should fit into a\
-             c_int"
-                    .to_owned(),
+                "Buffer capacity should fit into a c_int".to_owned(),
             )
         })?;
 
