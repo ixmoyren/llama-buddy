@@ -98,9 +98,11 @@ impl TokenDataVec {
             "Size of the returned array exceeds the data buffer's capacity!"
         );
         if !ptr::eq(data_array.data, data) {
-            ptr::copy(data_array.data, data, data_array.size);
+            unsafe {
+                ptr::copy(data_array.data, data, data_array.size);
+                self.raw.set_len(data_array.size);
+            }
         }
-        self.raw.set_len(data_array.size);
 
         self.sorted = data_array.sorted;
         self.selected = data_array
@@ -114,7 +116,7 @@ impl TokenDataVec {
 
     pub fn apply_sampler(&mut self, sampler: &Sampler) {
         unsafe {
-            self.modify_as_c_llama_token_data_array(|data_array| {
+            self.modify_by_llama_token_data_array(|data_array| {
                 llama_cpp_sys::llama_sampler_apply(sampler.raw_mut(), data_array);
             });
         }

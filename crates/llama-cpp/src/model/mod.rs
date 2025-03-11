@@ -57,32 +57,27 @@ impl Model {
 
     #[must_use]
     pub fn token_bos(&self) -> Token {
-        let llama_token = unsafe { llama_cpp_sys::llama_token_bos(self.vocab_ptr()) };
-        Token(llama_token)
+        unsafe { llama_cpp_sys::llama_token_bos(self.vocab_ptr()) }.into()
     }
 
     #[must_use]
     pub fn token_eos(&self) -> Token {
-        let llama_token = unsafe { llama_cpp_sys::llama_token_eos(self.vocab_ptr()) };
-        Token(llama_token)
+        unsafe { llama_cpp_sys::llama_token_eos(self.vocab_ptr()) }.into()
     }
 
     #[must_use]
     pub fn token_nl(&self) -> Token {
-        let llama_token = unsafe { llama_cpp_sys::llama_token_nl(self.vocab_ptr()) };
-        Token(llama_token)
+        unsafe { llama_cpp_sys::llama_token_nl(self.vocab_ptr()) }.into()
     }
 
     #[must_use]
-    pub fn is_eog_token(&self, Token(llama_token): Token) -> bool {
-        unsafe { llama_cpp_sys::llama_token_is_eog(self.vocab_ptr(), llama_token) }
+    pub fn is_eog_token(&self, token: Token) -> bool {
+        unsafe { llama_cpp_sys::llama_token_is_eog(self.vocab_ptr(), token.raw()) }
     }
 
     #[must_use]
     pub fn decode_start_token(&self) -> Token {
-        let llama_token =
-            unsafe { llama_cpp_sys::llama_model_decoder_start_token(self.raw.as_ptr()) };
-        Token(llama_token)
+        unsafe { llama_cpp_sys::llama_model_decoder_start_token(self.raw.as_ptr()) }.into()
     }
 
     pub fn token_to_str(
@@ -182,8 +177,9 @@ impl Model {
     }
 
     #[must_use]
-    pub fn token_attr(&self, Token(id): Token) -> TokenAttrs {
-        let token_type = unsafe { llama_cpp_sys::llama_token_get_attr(self.vocab_ptr(), id) };
+    pub fn token_attr(&self, token: Token) -> TokenAttrs {
+        let token_type =
+            unsafe { llama_cpp_sys::llama_token_get_attr(self.vocab_ptr(), token.raw()) };
         TokenAttrs::try_from(token_type).expect("token type is valid")
     }
 
@@ -230,7 +226,7 @@ impl Model {
         let size = unsafe {
             llama_cpp_sys::llama_token_to_piece(
                 self.vocab_ptr(),
-                token.0,
+                token.raw(),
                 buf,
                 len,
                 lstrip,

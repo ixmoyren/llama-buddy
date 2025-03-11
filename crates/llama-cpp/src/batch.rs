@@ -25,7 +25,7 @@ impl Batch {
 
     pub fn add(
         &mut self,
-        Token(id): Token,
+        token: Token,
         pos: llama_cpp_sys::llama_pos,
         seq_ids: &[i32],
         logits: bool,
@@ -36,7 +36,7 @@ impl Batch {
         let offset = self.raw.n_tokens;
         let offset_usize = usize::try_from(offset)?;
         unsafe {
-            self.raw.token.add(offset_usize).write(id);
+            self.raw.token.add(offset_usize).write(token.raw());
             self.raw.pos.add(offset_usize).write(pos);
             self.raw
                 .n_seq_id

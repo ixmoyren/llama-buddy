@@ -25,6 +25,12 @@ impl Token {
     }
 }
 
+impl From<llama_cpp_sys::llama_token> for Token {
+    fn from(token: llama_cpp_sys::llama_token) -> Self {
+        Self(token)
+    }
+}
+
 impl Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
