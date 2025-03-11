@@ -37,10 +37,9 @@ impl Sampler {
 
     pub fn apply_to(&self, token_data_vec: &mut TokenDataVec) {
         unsafe {
-            let modify_fn = |data_array| {
+            token_data_vec.modify_by_llama_token_data_array(|data_array| {
                 llama_cpp_sys::llama_sampler_apply(self.raw_mut(), data_array);
-            };
-            token_data_vec.modify_by_llama_token_data_array(modify_fn)
+            })
         }
     }
 
