@@ -6,7 +6,7 @@ use crate::error::{
 };
 use crate::ggml_numa::Strategy;
 use crate::model::{AdapterLora, Model, ModelParams};
-use crate::token::{Token, TokenData, TokenDataArray};
+use crate::token::{Token, TokenData, TokenDataVec};
 use std::ffi::CString;
 use std::path::{Path, PathBuf};
 use std::ptr::NonNull;
@@ -224,8 +224,8 @@ impl Runtime {
     }
 
     #[must_use]
-    pub fn token_data_array(&self, model: &Model, context: &Context) -> TokenDataArray {
-        TokenDataArray::from_iter(self.candidates(model, context), false)
+    pub fn token_data_vec(&self, model: &Model, context: &Context) -> TokenDataVec {
+        TokenDataVec::from_iter(self.candidates(model, context), false)
     }
 
     #[must_use]
@@ -252,8 +252,8 @@ impl Runtime {
     }
 
     #[must_use]
-    pub fn token_data_array_ith(&self, model: &Model, context: &Context, i: i32) -> TokenDataArray {
-        TokenDataArray::from_iter(self.candidates_ith(model, context, i), false)
+    pub fn token_data_vec_ith(&self, model: &Model, context: &Context, i: i32) -> TokenDataVec {
+        TokenDataVec::from_iter(self.candidates_ith(model, context, i), false)
     }
 
     #[must_use]

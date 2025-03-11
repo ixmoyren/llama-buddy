@@ -3,7 +3,7 @@ mod logit_bias;
 
 use crate::error::TokenTypeConversionError;
 pub use data::TokenData;
-pub use data::TokenDataArray;
+pub use data::TokenDataVec;
 use enumflags2::{BitFlags, bitflags};
 pub use logit_bias::LogitBias;
 use std::fmt::Display;

@@ -439,9 +439,26 @@ impl Model {
     }
 }
 
+impl From<*mut llama_cpp_sys::llama_model> for Model {
+    fn from(value: *mut llama_cpp_sys::llama_model) -> Self {
+        Self {
+            raw: NonNull::new(value).expect("Non-null pointer"),
+        }
+    }
+}
+
+impl From<llama_cpp_sys::llama_model> for Model {
+    fn from(mut value: llama_cpp_sys::llama_model) -> Self {
+        let raw = &mut value as _;
+        Self {
+            raw: NonNull::new(raw).expect("Non-null pointer"),
+        }
+    }
+}
+
 impl From<NonNull<llama_cpp_sys::llama_model>> for Model {
-    fn from(raw: NonNull<llama_cpp_sys::llama_model>) -> Self {
-        Self { raw }
+    fn from(value: NonNull<llama_cpp_sys::llama_model>) -> Self {
+        Self { raw: value }
     }
 }
 
