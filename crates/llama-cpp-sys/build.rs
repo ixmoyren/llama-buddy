@@ -194,7 +194,7 @@ fn main() -> anyhow::Result<()> {
     let bindings = bindgen::Builder::default()
         // 指定生成 2024 版本的代码
         .rust_edition(RustEdition::Edition2024)
-        .rust_target(RustTarget::Nightly)
+        .rust_target(RustTarget::nightly())
         .header("wrapper.h")
         .clang_arg(format!("-I{}", &llama_src_dir.join("include").display()))
         .clang_arg(format!(
