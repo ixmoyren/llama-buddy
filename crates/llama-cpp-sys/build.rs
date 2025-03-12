@@ -9,9 +9,9 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::{env, fs};
 
-// 值来自 llama.cpp 中 CMake 配置的 Profile
+/// llama.cpp 构建类型，默认是 Release
 #[derive(Debug, Default, Eq, PartialEq)]
-enum CMakeConfigProfile {
+enum CMakeBuildType {
     Debug,
     #[default]
     Release,
@@ -19,9 +19,9 @@ enum CMakeConfigProfile {
     RelWithDebInfo,
 }
 
-impl CMakeConfigProfile {
+impl CMakeBuildType {
     fn as_str(&self) -> &str {
-        use CMakeConfigProfile::*;
+        use CMakeBuildType::*;
         match self {
             Debug => "Debug",
             Release => "Release",
@@ -31,34 +31,35 @@ impl CMakeConfigProfile {
     }
 }
 
-impl From<String> for CMakeConfigProfile {
+impl From<String> for CMakeBuildType {
     fn from(value: String) -> Self {
         let value = value.as_str();
         value.into()
     }
 }
 
-impl From<&str> for CMakeConfigProfile {
+impl From<&str> for CMakeBuildType {
     fn from(value: &str) -> Self {
-        use CMakeConfigProfile::*;
+        use CMakeBuildType::*;
         match value {
             "Debug" => Debug,
             "Release" => Release,
             "MinSizeRel" => MinSizeRel,
             "RelWithDebInfo" => RelWithDebInfo,
-            _ => panic!("This profile is not supported!"),
+            _ => panic!("This build type value is not supported!"),
         }
     }
 }
 
-// https://doc.rust-lang.org/rustc/platform-support.html
+/// 目标三元组，默认 x86_64_unknown_linux_gnu
+/// https://doc.rust-lang.org/rustc/platform-support.html
 #[derive(Debug, Eq, PartialEq)]
 struct TargetTriple {
     // 架构
     architecture: String,
     // 供应商
     vendor: String,
-    // 系统
+    // 操作系统
     system: String,
     // ABI
     environment: String,
@@ -97,56 +98,67 @@ impl TargetTriple {
         Ok(Self::new(architecture, vendor, system, environment))
     }
 
+    /// 通过供应商判断，编译目标是否来自苹果的设备
     #[inline]
     fn is_apple(&self) -> bool {
-        self.vendor == "Apple"
+        self.vendor == "apple"
     }
 
+    /// 通过供应商和操作系统判断，编译目标是否是 Apple MacOS 系统
     #[inline]
     fn is_apple_darwin(&self) -> bool {
         self.is_apple() && self.system == "darwin"
     }
 
+    /// 通过操作系统判断，编译目标是否是 Android 系统
     #[inline]
     fn is_android(&self) -> bool {
         self.system.contains("android")
     }
 
+    /// 通过操作系统和架构判断，编译目标是否 aarch64 平台上的 Android 系统
     #[inline]
     fn is_aarch64_android(&self) -> bool {
         self.is_android() && self.architecture == "aarch64"
     }
 
+    /// 通过操作系统和架构判断，编译目标是否 armv7 平台上的 Android 系统
     #[inline]
     fn is_armv7_android(&self) -> bool {
         self.is_android() && self.architecture == "armv7"
     }
 
+    /// 通过操作系统和架构判断，编译目标是否 x86_64 平台上的 Android 系统
     #[inline]
     fn is_x86_64_android(&self) -> bool {
         self.is_android() && self.architecture == "x86_64"
     }
 
+    /// 通过操作系统和架构判断，编译目标是否 i686 平台上的 Android 系统
     #[inline]
     fn is_i686_android(&self) -> bool {
         self.is_android() && self.architecture == "i686"
     }
 
+    /// 通过操作系统判断，编译目标是否是 Linux 系统
     #[inline]
     fn is_linux(&self) -> bool {
         self.system == "linux"
     }
 
+    /// 通过操作系统判断，编译目标是否是 Windows 系统
     #[inline]
     fn is_windows(&self) -> bool {
         self.system == "windows"
     }
 
+    /// 通过操作系统和 api 判断，编译目标是否是 Windows 系统，并且采用 MSVC 工具链编译
     #[inline]
     fn is_windows_msvc(&self) -> bool {
         self.is_windows() && self.environment == "msvc"
     }
 
+    /// 通过 api 判断，采用 gnu 工具链编译
     #[inline]
     fn is_gnu(&self) -> bool {
         self.environment == "gnu"
@@ -158,6 +170,7 @@ fn main() -> anyhow::Result<()> {
     let binding_rs_out_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?).join("llama");
     // 编译产物所在的路径
     let out_dir = PathBuf::from(env::var("OUT_DIR")?);
+    // llama.cpp 源码路径
     let llama_src_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?).join("llama.cpp");
 
     // 监听可能变化的文件，当文件变化则重新构建
@@ -196,28 +209,32 @@ fn main() -> anyhow::Result<()> {
         .rust_edition(RustEdition::Edition2024)
         .rust_target(RustTarget::nightly())
         .header("wrapper.h")
+        // 指定 Clang 搜索头文件的路径
         .clang_arg(format!("-I{}", &llama_src_dir.join("include").display()))
         .clang_arg(format!(
             "-I{}",
             &llama_src_dir.join("ggml/include").display()
         ))
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
+        // 设置生成的代码中派生 PartialEq，即生成的 struct 上面有 #[derive(PartialEq)] 注解
         .derive_partialeq(true)
         .allowlist_function("ggml_.*")
         .allowlist_type("ggml_.*")
         .allowlist_function("llama_.*")
         .allowlist_type("llama_.*")
+        // 不把 enum 附加到常量和 newType 变体
         .prepend_enum_name(false)
         .generate()
         .context("Failed to generate bindings")?;
     bindings
+        // 指定生成的代码写入的文件，显式指定这个路径，目的为了 IDE 或者 LSP 可以分析到这个文件，进而提供更好的提示和代码完成
         .write_to_file(binding_rs_out_dir.join("bindings.rs"))
         .context("Failed to write bindings")?;
 
-    // Cmake 配置，配置详情可以通过 llama.cpp 的 CMakeLists.txt 中了解
+    // Cmake 配置，详情可以通过 llama.cpp 的 CMakeLists.txt 中了解
     let mut cmake_config = Config::new(&llama_src_dir);
 
-    // 允许设置 CMake 在构建项目时的并行级别
+    // 允许通过环境变量设置 CMake 在构建项目时的并行级别
     let parallel_level = env::var("BUILD_PARALLEL_LEVEL")
         .map_or(
             std::thread::available_parallelism()
@@ -237,16 +254,17 @@ fn main() -> anyhow::Result<()> {
     // 编译 LLaMA 模型时不生成共享库
     cmake_config.define("BUILD_SHARED_LIBS", "OFF");
 
-    // 允许配置 llama.cpp 编译的 profile， 默认是 Release，并且监听这个环境变量
-    let profile = env::var("LLAMA_LIB_PROFILE").map_or(CMakeConfigProfile::default(), String::into);
-    println!("cargo:rerun-if-env-changed=LLAMA_LIB_PROFILE");
+    // 允许通过环境变量配置 llama.cpp 编译的 profile， 默认是 Release，并且监听这个环境变量
+    let profile =
+        env::var("LLAMA_CMAKE_BUILD_TYPE").map_or(CMakeBuildType::default(), String::into);
+    println!("cargo:rerun-if-env-changed=LLAMA_CMAKE_BUILD_TYPE");
     cmake_config.profile(profile.as_str());
 
-    // 允许配置 CMake 是否输出详细信息
+    // 允许通过环境变量配置 CMake 是否输出详细信息
     let verbose = env::var("CMAKE_VERBOSE").is_ok();
     cmake_config.very_verbose(verbose);
 
-    // 允许配置 llama.cpp 模型在编译时是否使用静态运行时库（CRT），这个环境变量为布尔值 true 和 false，并且监听这个环境变量
+    // 允许通过环境变量配置 llama.cpp 模型在编译时是否使用静态运行时库（CRT），这个环境变量为布尔值 true 和 false，并且监听这个环境变量
     let static_crt = env::var("LLAMA_STATIC_CRT")
         .map(|v| v == "true")
         .unwrap_or(false);
@@ -265,7 +283,7 @@ fn main() -> anyhow::Result<()> {
 
     // 如果是 Windows 系统 msvc 工具链，并且 CMake 的 profile 不是 Debug，手动添加优化标识
     // 详细情况可看 https://github.com/rust-lang/cmake-rs/issues/240
-    if target.is_windows_msvc() && profile != CMakeConfigProfile::Debug {
+    if target.is_windows_msvc() && profile != CMakeBuildType::Debug {
         for flag in &["/O2", "/DNDEBUG", "/Ob2"] {
             cmake_config.cflag(flag);
             cmake_config.cxxflag(flag);
@@ -308,7 +326,7 @@ fn main() -> anyhow::Result<()> {
         // 不将  LLaMA 模型打包成一个单一文件
         cmake_config.define("GGML_LLAMAFILE", "OFF");
 
-        // 开启 android 下 共享 stdcxx
+        // 开启 android 系统下共享 stdcxx 库
         if cfg!(feature = "android-shared-stdcxx") {
             println!("cargo:rustc-link-lib=dylib=stdc++");
             println!("cargo:rustc-link-lib=c++_shared");
@@ -316,6 +334,7 @@ fn main() -> anyhow::Result<()> {
     }
 
     // 针对 feature 进行配置
+    // 开启 vulkan，需要开启 cmake 的 vulkan 功能标志，并提供 vulkan 的 lib，供 rustc 链接
     if cfg!(feature = "vulkan") {
         cmake_config.define("GGML_VULKAN", "ON");
         if target.is_windows() {
@@ -331,6 +350,7 @@ fn main() -> anyhow::Result<()> {
         }
     }
 
+    // 开启 cuda 功能则需要开启 cmake 的 cuda 功能标志
     if cfg!(feature = "cuda") {
         cmake_config.define("GGML_CUDA", "ON");
         if cfg!(feature = "cuda-no-vmm") {
@@ -338,6 +358,8 @@ fn main() -> anyhow::Result<()> {
         }
     }
 
+    // 开启 openmp 功能（OpenMP主要用于多线程并行计算）
+    // openmp 在安卓上性能提升不明显，安卓平台优先使用 vulkan 编译
     if cfg!(feature = "openmp") && !target.is_android() {
         cmake_config.define("GGML_OPENMP", "ON");
     } else {
@@ -365,6 +387,7 @@ fn main() -> anyhow::Result<()> {
     println!("cargo:rustc-link-search={}", build_dir.display());
 
     if cfg!(feature = "cuda") {
+        // 寻找 cuda 安装的路径
         for lib_dir in find_cuda_helper::find_cuda_lib_dirs() {
             println!("cargo:rustc-link-search=native={}", lib_dir.display());
         }
@@ -391,6 +414,7 @@ fn main() -> anyhow::Result<()> {
     assert_ne!(llama_libs.len(), 0);
 
     for lib in llama_libs {
+        // 静态链接到这些编译后的库产物中
         println!("cargo:rustc-link-lib={llama_libs_kind}={lib}",);
     }
 
@@ -399,6 +423,7 @@ fn main() -> anyhow::Result<()> {
         println!("cargo:rustc-link-lib=gomp");
     }
 
+    // 链接 c++ runtime
     if target.is_linux() {
         println!("cargo:rustc-link-lib=dylib=stdc++");
     } else if target.is_apple() {
@@ -426,15 +451,13 @@ fn extract_lib_names(out_dir: &Path, target: &TargetTriple) -> anyhow::Result<Ve
     println!("cargo:warning=Extract libs {}", pattern.display());
 
     let mut lib_names: Vec<String> = Vec::new();
-
-    // Process the libraries based on the pattern
+    // 通过指定的 pattern 找到所有编译生成的库产物
     for entry in glob(pattern.to_str().unwrap())? {
         match entry {
             Ok(path) => {
                 let stem = path.file_stem().unwrap();
                 let stem_str = stem.to_str().unwrap();
-
-                // Remove the "lib" prefix if present
+                // 移除 lib 前缀
                 let lib_name = if stem_str.starts_with("lib") {
                     stem_str.strip_prefix("lib").unwrap_or(stem_str)
                 } else {
