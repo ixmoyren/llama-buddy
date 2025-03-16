@@ -11,6 +11,7 @@ use crate::error::{
     TokenConversionError,
 };
 use crate::token::{Token, TokenAttr, TokenAttrs};
+use crate::vocabulary::Vocabulary;
 use std::ffi::CString;
 use std::num::NonZeroU16;
 use std::ops::{Deref, DerefMut};
@@ -36,8 +37,9 @@ impl Model {
         self.raw.as_ptr()
     }
 
-    pub fn vocab_ptr(&self) -> *const llama_cpp_sys::llama_vocab {
-        unsafe { llama_cpp_sys::llama_model_get_vocab(self.raw.as_ptr()) }
+    pub fn vocab(&self) -> Vocabulary {
+        let raw = unsafe { llama_cpp_sys::llama_model_get_vocab(self.raw.as_ptr()) };
+        raw.into()
     }
 
     #[must_use]
@@ -53,26 +55,6 @@ impl Model {
         (0..self.n_vocab())
             .map(Token::new)
             .map(move |llama_token| (llama_token, self.token_to_str(llama_token, special)))
-    }
-
-    #[must_use]
-    pub fn token_bos(&self) -> Token {
-        unsafe { llama_cpp_sys::llama_token_bos(self.vocab_ptr()) }.into()
-    }
-
-    #[must_use]
-    pub fn token_eos(&self) -> Token {
-        unsafe { llama_cpp_sys::llama_token_eos(self.vocab_ptr()) }.into()
-    }
-
-    #[must_use]
-    pub fn token_nl(&self) -> Token {
-        unsafe { llama_cpp_sys::llama_token_nl(self.vocab_ptr()) }.into()
-    }
-
-    #[must_use]
-    pub fn is_eog_token(&self, token: Token) -> bool {
-        unsafe { llama_cpp_sys::llama_token_is_eog(self.vocab_ptr(), token.raw()) }
     }
 
     #[must_use]
@@ -138,9 +120,11 @@ impl Model {
             )
         })?;
 
+        let vocab = self.vocab();
+
         let size = unsafe {
             llama_cpp_sys::llama_tokenize(
-                self.vocab_ptr(),
+                vocab.raw_mut(),
                 c_string.as_ptr(),
                 c_int::try_from(c_string.as_bytes().len())?,
                 buffer.as_mut_ptr().cast::<llama_cpp_sys::llama_token>(),
@@ -178,8 +162,9 @@ impl Model {
 
     #[must_use]
     pub fn token_attr(&self, token: Token) -> TokenAttrs {
+        let vocab = self.vocab();
         let token_type =
-            unsafe { llama_cpp_sys::llama_token_get_attr(self.vocab_ptr(), token.raw()) };
+            unsafe { llama_cpp_sys::llama_token_get_attr(vocab.raw_mut(), token.raw()) };
         TokenAttrs::try_from(token_type).expect("token type is valid")
     }
 
