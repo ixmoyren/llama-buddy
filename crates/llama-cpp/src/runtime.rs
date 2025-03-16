@@ -22,7 +22,7 @@ pub struct Runtime;
 
 impl Runtime {
     #[tracing::instrument(level = "info")]
-    pub fn init() {
+    pub fn init() -> Self {
         let _ = BACKEND_INITIALIZED.get_or_init(|| {
             unsafe {
                 llama_cpp_sys::llama_backend_init();
@@ -30,10 +30,11 @@ impl Runtime {
             info!("Initialized llama.cpp backend (without numa).");
             BackendInitializedType::Default
         });
+        Self
     }
 
     #[tracing::instrument(level = "info")]
-    pub fn load_all() {
+    pub fn load_all() -> Self {
         let _ = BACKEND_INITIALIZED.get_or_init(|| {
             unsafe {
                 llama_cpp_sys::ggml_backend_load_all();
@@ -41,10 +42,11 @@ impl Runtime {
             info!("Initialized llama.cpp backend (without numa).");
             BackendInitializedType::LoadAll
         });
+        Self
     }
 
     #[tracing::instrument(level = "info")]
-    pub fn load_all_from_path(path: PathBuf) {
+    pub fn load_all_from_path(path: PathBuf) -> Self {
         let _ = BACKEND_INITIALIZED.get_or_init(|| {
             let dir_path = path.clone().into_os_string().into_string().unwrap();
             let dir_path = CString::new(dir_path).unwrap();
@@ -54,10 +56,11 @@ impl Runtime {
             info!("Initialized llama.cpp backend (without numa).");
             BackendInitializedType::LoadAllFromPath(path)
         });
+        Self
     }
 
     #[tracing::instrument(level = "info")]
-    pub fn init_with_ggml_numa(strategy: Strategy) {
+    pub fn init_with_ggml_numa(strategy: Strategy) -> Self {
         let _ = BACKEND_INITIALIZED.get_or_init(|| {
             let strategy = strategy.into();
             unsafe {
@@ -66,6 +69,7 @@ impl Runtime {
             info!("Initialize the llama numa with strategy: {strategy}.");
             BackendInitializedType::GgmlNumaStrategy
         });
+        Self
     }
 
     /// 是否支持 GPU
