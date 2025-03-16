@@ -1,3 +1,4 @@
+use crate::error::VocabularyTypeConversionError;
 use crate::token::Token;
 use std::ops::{Deref, DerefMut};
 use std::ptr::NonNull;
@@ -13,8 +14,20 @@ impl Vocabulary {
     }
 
     #[must_use]
+    pub fn vocab_type(&self) -> VocabularyType {
+        let vocab_type = unsafe { llama_cpp_sys::llama_vocab_type(self.raw_mut()) };
+        VocabularyType::try_from(vocab_type).expect("invalid vocab type")
+    }
+
+    #[must_use]
     pub fn token_bos(&self) -> Token {
         unsafe { llama_cpp_sys::llama_token_bos(self.raw_mut()) }.into()
+    }
+
+    /// 模型被训练的令牌数量
+    #[must_use]
+    pub fn token_quantity(&self) -> i32 {
+        unsafe { llama_cpp_sys::llama_vocab_n_tokens(self.raw_mut()) }
     }
 
     #[must_use]
@@ -67,5 +80,34 @@ impl Deref for Vocabulary {
 impl DerefMut for Vocabulary {
     fn deref_mut(&mut self) -> &mut Self::Target {
         unsafe { self.raw.as_mut() }
+    }
+}
+
+/// a rusty equivalent of `llama_vocab_type`
+#[repr(u32)]
+#[derive(Debug, Eq, Copy, Clone, PartialEq)]
+pub enum VocabularyType {
+    NONE = llama_cpp_sys::LLAMA_VOCAB_TYPE_NONE as _,
+    SPM = llama_cpp_sys::LLAMA_VOCAB_TYPE_SPM as _,
+    BPE = llama_cpp_sys::LLAMA_VOCAB_TYPE_BPE as _,
+    WPM = llama_cpp_sys::LLAMA_VOCAB_TYPE_WPM as _,
+    UGM = llama_cpp_sys::LLAMA_VOCAB_TYPE_UGM as _,
+    RWKV = llama_cpp_sys::LLAMA_VOCAB_TYPE_RWKV as _,
+}
+
+impl TryFrom<llama_cpp_sys::llama_vocab_type> for VocabularyType {
+    type Error = VocabularyTypeConversionError;
+
+    fn try_from(value: llama_cpp_sys::llama_vocab_type) -> Result<Self, Self::Error> {
+        use self::VocabularyType::*;
+        match value {
+            llama_cpp_sys::LLAMA_VOCAB_TYPE_NONE => Ok(NONE),
+            llama_cpp_sys::LLAMA_VOCAB_TYPE_SPM => Ok(SPM),
+            llama_cpp_sys::LLAMA_VOCAB_TYPE_BPE => Ok(BPE),
+            llama_cpp_sys::LLAMA_VOCAB_TYPE_WPM => Ok(WPM),
+            llama_cpp_sys::LLAMA_VOCAB_TYPE_UGM => Ok(UGM),
+            llama_cpp_sys::LLAMA_VOCAB_TYPE_RWKV => Ok(RWKV),
+            unknown => Err(VocabularyTypeConversionError::UnknownValue(unknown)),
+        }
     }
 }

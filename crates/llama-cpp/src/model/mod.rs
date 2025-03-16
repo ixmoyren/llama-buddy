@@ -232,19 +232,6 @@ impl Model {
         }
     }
 
-    /// 模型被训练的令牌数量
-    #[must_use]
-    pub fn n_vocab(&self) -> i32 {
-        unsafe { llama_cpp_sys::llama_n_vocab(self.vocab_ptr()) }
-    }
-
-    #[must_use]
-    pub fn vocab_type(&self) -> VocabType {
-        // llama_cpp_sys_2::llama_model_get_vocab
-        let vocab_type = unsafe { llama_cpp_sys::llama_vocab_type(self.vocab_ptr()) };
-        VocabType::try_from(vocab_type).expect("invalid vocab type")
-    }
-
     #[must_use]
     pub fn n_embd(&self) -> c_int {
         unsafe { llama_cpp_sys::llama_n_embd(self.raw.as_ptr()) }
@@ -460,36 +447,6 @@ impl DerefMut for Model {
 impl Drop for Model {
     fn drop(&mut self) {
         unsafe { llama_cpp_sys::llama_free_model(self.raw.as_ptr()) }
-    }
-}
-
-/// a rusty equivalent of `llama_vocab_type`
-#[repr(u32)]
-#[derive(Debug, Eq, Copy, Clone, PartialEq)]
-pub enum VocabType {
-    /// Byte Pair Encoding
-    BPE = llama_cpp_sys::LLAMA_VOCAB_TYPE_BPE as _,
-    /// Sentence Piece Tokenizer
-    SPM = llama_cpp_sys::LLAMA_VOCAB_TYPE_SPM as _,
-}
-
-/// There was an error converting a `llama_vocab_type` to a `VocabType`.
-#[derive(thiserror::Error, Debug, Eq, PartialEq)]
-pub enum LlamaTokenTypeFromIntError {
-    /// The value is not a valid `llama_token_type`. Contains the int value that was invalid.
-    #[error("Unknown Value {0}")]
-    UnknownValue(llama_cpp_sys::llama_vocab_type),
-}
-
-impl TryFrom<llama_cpp_sys::llama_vocab_type> for VocabType {
-    type Error = LlamaTokenTypeFromIntError;
-
-    fn try_from(value: llama_cpp_sys::llama_vocab_type) -> Result<Self, Self::Error> {
-        match value {
-            llama_cpp_sys::LLAMA_VOCAB_TYPE_BPE => Ok(VocabType::BPE),
-            llama_cpp_sys::LLAMA_VOCAB_TYPE_SPM => Ok(VocabType::SPM),
-            unknown => Err(LlamaTokenTypeFromIntError::UnknownValue(unknown)),
-        }
     }
 }
 

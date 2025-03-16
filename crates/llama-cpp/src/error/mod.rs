@@ -6,6 +6,7 @@ mod lora;
 mod model;
 mod runtime;
 mod token;
+mod vocabulary;
 
 pub use batch::BatchAddError;
 pub use cache::KvCacheConversionError;
@@ -25,6 +26,7 @@ pub use model::TokenConversionError;
 pub use runtime::GgmlNumaStrategyError;
 use thiserror::Error;
 pub use token::TokenTypeConversionError;
+pub use vocabulary::VocabularyTypeConversionError;
 
 /// llama_cpp 全部的错误汇总
 #[derive(Debug, Eq, PartialEq, Error)]
@@ -60,4 +62,6 @@ pub enum LLamaCppError {
     Embeddings(#[from] EmbeddingsError),
     #[error("{0}")]
     KvCacheConversion(#[from] KvCacheConversionError),
+    #[error("{0}")]
+    VocabularyTypeConversion(#[from] VocabularyTypeConversionError),
 }
