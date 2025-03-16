@@ -69,17 +69,17 @@ impl Runtime {
     }
 
     /// 是否支持 GPU
-    pub fn supports_gpu_offload(&self) -> bool {
+    pub fn support_gpu_offload(&self) -> bool {
         unsafe { llama_cpp_sys::llama_supports_gpu_offload() }
     }
 
     /// 是否支持 mmap
-    pub fn supports_mmap(&self) -> bool {
+    pub fn support_mmap(&self) -> bool {
         unsafe { llama_cpp_sys::llama_supports_mmap() }
     }
 
     /// 是否支持将模型锁定在内存里面
-    pub fn supports_mlock(&self) -> bool {
+    pub fn support_mlock(&self) -> bool {
         unsafe { llama_cpp_sys::llama_supports_mlock() }
     }
 
