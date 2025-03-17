@@ -213,6 +213,14 @@ impl Vocabulary {
     }
 }
 
+impl From<*const llama_cpp_sys::llama_vocab> for Vocabulary {
+    fn from(value: *const llama_cpp_sys::llama_vocab) -> Self {
+        Self {
+            raw: NonNull::new(value as _).expect("Non-null pointer"),
+        }
+    }
+}
+
 impl From<*mut llama_cpp_sys::llama_vocab> for Vocabulary {
     fn from(value: *mut llama_cpp_sys::llama_vocab) -> Self {
         Self {

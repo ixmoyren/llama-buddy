@@ -237,7 +237,9 @@ impl Runtime {
     pub fn logits(&self, model: &Model, context: &Context) -> &[f32] {
         let data = unsafe { llama_cpp_sys::llama_get_logits(context.raw_mut()) };
         assert!(!data.is_null(), "logits data for last token is null");
-        let len = usize::try_from(model.n_vocab()).expect("n_vocab does not fit into a usize");
+        let vocab = model.vocab();
+        let len =
+            usize::try_from(vocab.token_quantity()).expect("n_vocab does not fit into a usize");
 
         unsafe { slice::from_raw_parts(data, len) }
     }
@@ -276,7 +278,9 @@ impl Runtime {
         );
 
         let data = unsafe { llama_cpp_sys::llama_get_logits_ith(context.raw_mut(), i) };
-        let len = usize::try_from(model.n_vocab()).expect("n_vocab does not fit into a usize");
+        let vocab = model.vocab();
+        let len =
+            usize::try_from(vocab.token_quantity()).expect("n_vocab does not fit into a usize");
 
         unsafe { slice::from_raw_parts(data, len) }
     }

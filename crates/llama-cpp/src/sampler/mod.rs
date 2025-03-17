@@ -1,7 +1,7 @@
 use crate::model::Model;
 use crate::token::{LogitBias, Token, TokenDataVec};
 use std::borrow::Borrow;
-use std::ffi::{CString, c_char};
+use std::ffi::{c_char, CString};
 use std::ops::{Deref, DerefMut};
 use std::ptr::NonNull;
 
@@ -114,10 +114,11 @@ impl Sampler {
     pub fn from_grammar(model: &Model, grammar_str: &str, grammar_root: &str) -> Self {
         let grammar_str = CString::new(grammar_str).unwrap();
         let grammar_root = CString::new(grammar_root).unwrap();
+        let vocab = model.vocab();
 
         unsafe {
             llama_cpp_sys::llama_sampler_init_grammar(
-                model.vocab_ptr(),
+                vocab.raw_mut(),
                 grammar_str.as_ptr(),
                 grammar_root.as_ptr(),
             )
@@ -144,9 +145,11 @@ impl Sampler {
         let mut trigger_word_ptrs: Vec<*const c_char> =
             trigger_word_cstrings.iter().map(|cs| cs.as_ptr()).collect();
 
+        let vocab = model.vocab();
+
         unsafe {
             llama_cpp_sys::llama_sampler_init_grammar_lazy(
-                model.vocab_ptr(),
+                vocab.raw_mut(),
                 grammar_str.as_ptr(),
                 grammar_root.as_ptr(),
                 trigger_word_ptrs.as_mut_ptr(),
@@ -174,9 +177,11 @@ impl Sampler {
         let mut seq_breaker_pointers: Vec<*const c_char> =
             seq_breakers.iter().map(|s| s.as_ptr()).collect();
 
+        let vocab = model.vocab();
+
         unsafe {
             llama_cpp_sys::llama_sampler_init_dry(
-                model.vocab_ptr(),
+                vocab.raw_mut(),
                 model
                     .n_ctx_train()
                     .try_into()

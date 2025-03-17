@@ -52,7 +52,9 @@ impl Model {
         &self,
         special: Special,
     ) -> impl Iterator<Item = (Token, Result<String, TokenConversionError>)> + '_ {
-        (0..self.n_vocab())
+        let vocab = self.vocab();
+        let quantity = vocab.token_quantity();
+        (0..quantity)
             .map(Token::new)
             .map(move |llama_token| (llama_token, self.token_to_str(llama_token, special)))
     }
@@ -140,7 +142,7 @@ impl Model {
             })?);
             unsafe {
                 llama_cpp_sys::llama_tokenize(
-                    self.vocab_ptr(),
+                    self.vocab().raw_mut(),
                     c_string.as_ptr(),
                     c_int::try_from(c_string.as_bytes().len())?,
                     buffer.as_mut_ptr().cast::<llama_cpp_sys::llama_token>(),
@@ -185,7 +187,8 @@ impl Model {
         special: Special,
         lstrip: Option<NonZeroU16>,
     ) -> Result<Vec<u8>, TokenConversionError> {
-        if token == self.token_nl() {
+        let vocab = self.vocab();
+        if token == vocab.token_nl() {
             return Ok(b"\n".to_vec());
         }
 
@@ -193,7 +196,7 @@ impl Model {
         if attrs.is_empty()
             || attrs.intersects(TokenAttr::Unknown | TokenAttr::Byte | TokenAttr::Unused)
             || attrs.contains(TokenAttr::Control)
-                && (token == self.token_bos() || token == self.token_eos())
+                && (token == vocab.token_bos() || token == vocab.token_eos())
         {
             return Ok(Vec::new());
         }
@@ -210,7 +213,7 @@ impl Model {
         let lstrip = lstrip.map_or(0, |it| i32::from(it.get()));
         let size = unsafe {
             llama_cpp_sys::llama_token_to_piece(
-                self.vocab_ptr(),
+                vocab.raw_mut(),
                 token.raw(),
                 buf,
                 len,
