@@ -26,6 +26,9 @@ pub use model::TokenConversionError;
 pub use runtime::GgmlNumaStrategyError;
 use thiserror::Error;
 pub use token::TokenTypeConversionError;
+pub use vocabulary::DeTokenizeError;
+pub use vocabulary::TokenToPieceError;
+pub use vocabulary::TokenizeError;
 pub use vocabulary::VocabularyTypeConversionError;
 
 /// llama_cpp 全部的错误汇总
@@ -64,4 +67,10 @@ pub enum LLamaCppError {
     KvCacheConversion(#[from] KvCacheConversionError),
     #[error("{0}")]
     VocabularyTypeConversion(#[from] VocabularyTypeConversionError),
+    #[error("{0}")]
+    TokenToPiece(#[from] TokenToPieceError),
+    #[error("{0}")]
+    Tokenize(#[from] TokenizeError),
+    #[error("{0}")]
+    DeTokenize(#[from] DeTokenizeError),
 }
