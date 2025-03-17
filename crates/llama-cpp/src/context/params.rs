@@ -153,11 +153,18 @@ impl ContextParams {
     }
 
     #[must_use]
-    pub fn with_n_ctx(mut self, n_ctx: Option<NonZeroU32>) -> Self {
-        self.raw.n_ctx = n_ctx.map_or(0, NonZeroU32::get);
+    pub fn n_perf(&self) -> bool {
+        self.raw.no_perf
+    }
+
+    /// 设置上下文大小
+    #[must_use]
+    pub fn with_n_ctx(mut self, n_ctx: u32) -> Self {
+        self.raw.n_ctx = n_ctx;
         self
     }
 
+    /// 设置每次调用 llama_decode 处理的最大令牌数
     #[must_use]
     pub fn with_n_batch(mut self, n_batch: u32) -> Self {
         self.raw.n_batch = n_batch;
@@ -236,6 +243,14 @@ impl ContextParams {
     #[must_use]
     pub fn with_pooling_type(mut self, pooling_type: PoolingType) -> Self {
         self.raw.pooling_type = i32::from(pooling_type);
+        self
+    }
+
+    /// 用于设置是否启用性能计数器
+    /// true - 关闭；false - 开启
+    #[must_use]
+    pub fn with_n_perf(mut self, n_perf: bool) -> Self {
+        self.raw.no_perf = n_perf;
         self
     }
 }
