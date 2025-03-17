@@ -6,8 +6,9 @@ use crate::error::{
 };
 use crate::ggml_numa::Strategy;
 use crate::model::{AdapterLora, Model, ModelParams};
+use crate::sampler::Sampler;
 use crate::token::{Token, TokenData, TokenDataVec};
-use std::ffi::CString;
+use std::ffi::{c_char, CString};
 use std::path::{Path, PathBuf};
 use std::ptr::NonNull;
 use std::slice;
@@ -283,6 +284,93 @@ impl Runtime {
             usize::try_from(vocab.token_quantity()).expect("n_vocab does not fit into a usize");
 
         unsafe { slice::from_raw_parts(data, len) }
+    }
+
+    #[must_use]
+    pub fn sampler_from_grammar(model: &Model, grammar_str: &str, grammar_root: &str) -> Sampler {
+        let grammar_str = CString::new(grammar_str).unwrap();
+        let grammar_root = CString::new(grammar_root).unwrap();
+        let vocab = model.vocab();
+
+        unsafe {
+            llama_cpp_sys::llama_sampler_init_grammar(
+                vocab.raw_mut(),
+                grammar_str.as_ptr(),
+                grammar_root.as_ptr(),
+            )
+        }
+        .into()
+    }
+
+    #[must_use]
+    pub fn sampler_from_grammar_lazy(
+        model: &Model,
+        grammar_str: &str,
+        grammar_root: &str,
+        trigger_words: impl IntoIterator<Item = impl AsRef<[u8]>>,
+        trigger_tokens: &[Token],
+    ) -> Sampler {
+        let grammar_str = CString::new(grammar_str).unwrap();
+        let grammar_root = CString::new(grammar_root).unwrap();
+
+        let trigger_word_cstrings: Vec<CString> = trigger_words
+            .into_iter()
+            .map(|word| CString::new(word.as_ref()).unwrap())
+            .collect();
+
+        let mut trigger_word_ptrs: Vec<*const c_char> =
+            trigger_word_cstrings.iter().map(|cs| cs.as_ptr()).collect();
+
+        let vocab = model.vocab();
+
+        unsafe {
+            llama_cpp_sys::llama_sampler_init_grammar_lazy(
+                vocab.raw_mut(),
+                grammar_str.as_ptr(),
+                grammar_root.as_ptr(),
+                trigger_word_ptrs.as_mut_ptr(),
+                trigger_word_ptrs.len(),
+                trigger_tokens.as_ptr().cast(),
+                trigger_tokens.len(),
+            )
+        }
+        .into()
+    }
+
+    #[must_use]
+    pub fn sampler_from_dry(
+        model: &Model,
+        multiplier: f32,
+        base: f32,
+        allowed_length: i32,
+        penalty_last_n: i32,
+        seq_breakers: impl IntoIterator<Item = impl AsRef<[u8]>>,
+    ) -> Sampler {
+        let seq_breakers: Vec<CString> = seq_breakers
+            .into_iter()
+            .map(|s| CString::new(s.as_ref()).expect("A sequence breaker contains null bytes"))
+            .collect();
+        let mut seq_breaker_pointers: Vec<*const c_char> =
+            seq_breakers.iter().map(|s| s.as_ptr()).collect();
+
+        let vocab = model.vocab();
+
+        unsafe {
+            llama_cpp_sys::llama_sampler_init_dry(
+                vocab.raw_mut(),
+                model
+                    .n_ctx_train()
+                    .try_into()
+                    .expect("n_ctx_train exceeds i32::MAX"),
+                multiplier,
+                base,
+                allowed_length,
+                penalty_last_n,
+                seq_breaker_pointers.as_mut_ptr(),
+                seq_breaker_pointers.len(),
+            )
+        }
+        .into()
     }
 }
 
