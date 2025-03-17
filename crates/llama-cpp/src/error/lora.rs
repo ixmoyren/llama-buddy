@@ -19,7 +19,7 @@ pub enum LlamaAdapterLoraInitError {
 #[derive(Debug, Eq, PartialEq, Error)]
 pub enum LlamaAdapterLoraSetError {
     #[error("Error code from llama.cpp, {0}")]
-    ErrorRetrun(i32),
+    ErrorReturn(i32),
 }
 
 #[derive(Debug, Eq, PartialEq, Error)]

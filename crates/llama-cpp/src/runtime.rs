@@ -101,6 +101,7 @@ impl Runtime {
         }
     }
 
+    /// 从本地文件中加载模型
     #[tracing::instrument(skip_all, fields(params))]
     pub fn load_model_from_file(
         &self,
@@ -145,7 +146,7 @@ impl Runtime {
             llama_cpp_sys::llama_set_adapter_lora(context.raw_mut(), adapter.raw_mut(), scale)
         };
         if err_code != 0 {
-            return Err(LlamaAdapterLoraSetError::ErrorRetrun(err_code));
+            return Err(LlamaAdapterLoraSetError::ErrorReturn(err_code));
         }
 
         tracing::debug!("Set lora adapter");
