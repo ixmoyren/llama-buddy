@@ -1,3 +1,4 @@
+use crate::context::Context;
 use crate::token::{LogitBias, Token, TokenDataVec};
 use std::borrow::Borrow;
 use std::ops::{Deref, DerefMut};
@@ -39,6 +40,11 @@ impl Sampler {
                 llama_cpp_sys::llama_sampler_apply(self.raw_mut(), data_array);
             })
         }
+    }
+
+    #[must_use]
+    pub fn sample(&mut self, ctx: &Context, idx: i32) -> Token {
+        unsafe { llama_cpp_sys::llama_sampler_sample(self.raw_mut(), ctx.raw_mut(), idx) }.into()
     }
 
     #[must_use]
