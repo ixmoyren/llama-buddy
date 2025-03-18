@@ -6,6 +6,7 @@ pub mod model;
 pub mod runtime;
 pub mod sampler;
 pub mod token;
+pub mod utils;
 pub mod vocabulary;
 
 use crate::error::LLamaCppError;
