@@ -52,7 +52,7 @@ impl Vocabulary {
 
     pub fn token_to_piece(
         &self,
-        token: Token,
+        token: &Token,
         lstrip: i32,
         special: bool,
     ) -> Result<String, TokenToPieceError> {
