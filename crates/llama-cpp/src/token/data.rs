@@ -129,14 +129,14 @@ impl TokenDataVec {
     }
 
     pub fn sample_token(&mut self, seed: u32) -> Token {
-        let sampler = Sampler::from_dist(seed);
+        let sampler = Sampler::init_from_dist(seed);
         self.apply_sampler(&sampler);
         self.selected_token()
             .expect("Dist sampler failed to select a token!")
     }
 
     pub fn sample_token_greedy(&mut self) -> Token {
-        let sampler = Sampler::from_greedy();
+        let sampler = Sampler::init_from_greedy();
         self.apply_sampler(&sampler);
         self.selected_token()
             .expect("Greedy sampler failed to select a token!")
