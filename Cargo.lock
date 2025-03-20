@@ -282,6 +282,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b63caa9aa9397e2d9480a9b13673856c78d8ac123288526c37d7839f2a86990"
 
 [[package]]
+name = "dir-extra"
+version = "0.1.0"
+dependencies = [
+ "thiserror",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
 name = "either"
 version = "1.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -427,6 +435,10 @@ dependencies = [
  "http-body",
  "pin-project-lite",
 ]
+
+[[package]]
+name = "http-extra"
+version = "0.1.0"
 
 [[package]]
 name = "httparse"

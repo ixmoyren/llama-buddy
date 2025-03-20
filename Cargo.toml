@@ -10,6 +10,7 @@ license = "MIT OR Apache-2.0"
 [workspace.dependencies]
 tracing = "0.1.41"
 anyhow = "1"
+thiserror = "2"
 
 [package]
 name = "llama-buddy"
