@@ -1,8 +1,6 @@
-use std::ffi::NulError;
-use std::num::TryFromIntError;
-use std::os::raw::c_int;
-use std::path::PathBuf;
-use std::string::FromUtf8Error;
+use std::{
+    ffi::NulError, num::TryFromIntError, os::raw::c_int, path::PathBuf, string::FromUtf8Error,
+};
 use thiserror::Error;
 
 #[derive(Debug, Eq, PartialEq, Error)]

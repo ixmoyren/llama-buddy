@@ -1,6 +1,5 @@
 //! A safe wrapper around `llama_context_params`.
-use std::fmt::Debug;
-use std::num::NonZeroU32;
+use std::{fmt::Debug, num::NonZeroU32};
 
 /// `rope_scaling_type` 包装器
 #[repr(i8)]

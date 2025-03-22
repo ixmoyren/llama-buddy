@@ -1,5 +1,4 @@
-use std::ffi::NulError;
-use std::path::PathBuf;
+use std::{ffi::NulError, path::PathBuf};
 use thiserror::Error;
 
 #[derive(Debug, Eq, PartialEq, Error)]

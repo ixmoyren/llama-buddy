@@ -1,11 +1,9 @@
 use anyhow::Context;
 use clap::Parser;
-use llama_cpp::batch::Batch;
-use llama_cpp::context::ContextParams;
-use llama_cpp::model::ModelParams;
-use llama_cpp::runtime::Runtime;
-use llama_cpp::sampler::Sampler;
-use llama_cpp::utils::ggml_time_us;
+use llama_cpp::{
+    batch::Batch, context::ContextParams, model::ModelParams, runtime::Runtime, sampler::Sampler,
+    utils::ggml_time_us,
+};
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]

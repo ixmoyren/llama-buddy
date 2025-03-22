@@ -6,18 +6,22 @@ pub use chat::*;
 pub use lora::*;
 pub use params::*;
 
-use crate::error::{
-    ApplyChatTemplateError, ChatTemplateError, LlamaAdapterLoraInitError, StringConversionError,
-    TokenConversionError,
+use crate::{
+    error::{
+        ApplyChatTemplateError, ChatTemplateError, LlamaAdapterLoraInitError,
+        StringConversionError, TokenConversionError,
+    },
+    token::{Token, TokenAttr, TokenAttrs},
+    vocabulary::Vocabulary,
 };
-use crate::token::{Token, TokenAttr, TokenAttrs};
-use crate::vocabulary::Vocabulary;
-use std::ffi::CString;
-use std::num::NonZeroU16;
-use std::ops::{Deref, DerefMut};
-use std::os::raw::{c_char, c_int};
-use std::path::Path;
-use std::ptr::NonNull;
+use std::{
+    ffi::CString,
+    num::NonZeroU16,
+    ops::{Deref, DerefMut},
+    os::raw::{c_char, c_int},
+    path::Path,
+    ptr::NonNull,
+};
 
 /// `llama_model` 的包装
 #[derive(Debug, Clone)]

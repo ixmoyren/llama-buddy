@@ -1,18 +1,21 @@
-use crate::context::Context;
-use crate::context::ContextParams;
-use crate::error::{
-    EmbeddingsError, LlamaAdapterLoraRemoveError, LlamaAdapterLoraSetError, LlamaContextLoadError,
-    LlamaModelLoadError,
+use crate::{
+    context::{Context, ContextParams},
+    error::{
+        EmbeddingsError, LlamaAdapterLoraRemoveError, LlamaAdapterLoraSetError,
+        LlamaContextLoadError, LlamaModelLoadError,
+    },
+    ggml_numa::Strategy,
+    model::{AdapterLora, Model, ModelParams},
+    sampler::Sampler,
+    token::{Token, TokenData, TokenDataVec},
 };
-use crate::ggml_numa::Strategy;
-use crate::model::{AdapterLora, Model, ModelParams};
-use crate::sampler::Sampler;
-use crate::token::{Token, TokenData, TokenDataVec};
-use std::ffi::{c_char, CString};
-use std::path::{Path, PathBuf};
-use std::ptr::NonNull;
-use std::slice;
-use std::sync::OnceLock;
+use std::{
+    ffi::{CString, c_char},
+    path::{Path, PathBuf},
+    ptr::NonNull,
+    slice,
+    sync::OnceLock,
+};
 use tracing::info;
 
 static BACKEND_INITIALIZED: OnceLock<BackendInitializedType> = OnceLock::new();

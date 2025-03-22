@@ -10,26 +10,18 @@ mod vocabulary;
 
 pub use batch::BatchAddError;
 pub use cache::KvCacheConversionError;
-pub use chat::ChatMessageError;
-pub use chat::ChatTemplateError;
-pub use context::DecodeError;
-pub use context::EmbeddingsError;
-pub use context::EncodeError;
-pub use context::LlamaContextLoadError;
-pub use lora::LlamaAdapterLoraInitError;
-pub use lora::LlamaAdapterLoraRemoveError;
-pub use lora::LlamaAdapterLoraSetError;
-pub use model::ApplyChatTemplateError;
-pub use model::LlamaModelLoadError;
-pub use model::StringConversionError;
-pub use model::TokenConversionError;
+pub use chat::{ChatMessageError, ChatTemplateError};
+pub use context::{DecodeError, EmbeddingsError, EncodeError, LlamaContextLoadError};
+pub use lora::{LlamaAdapterLoraInitError, LlamaAdapterLoraRemoveError, LlamaAdapterLoraSetError};
+pub use model::{
+    ApplyChatTemplateError, LlamaModelLoadError, StringConversionError, TokenConversionError,
+};
 pub use runtime::GgmlNumaStrategyError;
 use thiserror::Error;
 pub use token::TokenTypeConversionError;
-pub use vocabulary::DeTokenizeError;
-pub use vocabulary::TokenToPieceError;
-pub use vocabulary::TokenizeError;
-pub use vocabulary::VocabularyTypeConversionError;
+pub use vocabulary::{
+    DeTokenizeError, TokenToPieceError, TokenizeError, VocabularyTypeConversionError,
+};
 
 /// llama_cpp 全部的错误汇总
 #[derive(Debug, Eq, PartialEq, Error)]

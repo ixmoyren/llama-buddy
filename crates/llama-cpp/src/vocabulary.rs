@@ -1,12 +1,14 @@
-use crate::error::{
-    DeTokenizeError, TokenToPieceError, TokenizeError, VocabularyTypeConversionError,
+use crate::{
+    error::{DeTokenizeError, TokenToPieceError, TokenizeError, VocabularyTypeConversionError},
+    token::Token,
 };
-use crate::token::Token;
-use std::ffi::{CStr, CString};
-use std::ops::{Deref, DerefMut};
-use std::os::raw::c_char;
-use std::ptr;
-use std::ptr::{slice_from_raw_parts, NonNull};
+use std::{
+    ffi::{CStr, CString},
+    ops::{Deref, DerefMut},
+    os::raw::c_char,
+    ptr,
+    ptr::{NonNull, slice_from_raw_parts},
+};
 
 /// `llama_vocab` 的包装
 pub struct Vocabulary {

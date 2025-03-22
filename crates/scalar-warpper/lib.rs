@@ -1,5 +1,4 @@
-use axum::response::IntoResponse;
-use axum::{Router, routing};
+use axum::{Router, response::IntoResponse, routing};
 use http::{HeaderValue, header};
 use maud::{DOCTYPE, Markup, html};
 use serde::Serialize as SerdeSerialize;

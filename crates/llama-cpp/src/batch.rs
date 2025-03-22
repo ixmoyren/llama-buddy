@@ -1,5 +1,4 @@
-use crate::error::BatchAddError;
-use crate::token::Token;
+use crate::{error::BatchAddError, token::Token};
 
 /// A safe wrapper around `llama_batch`.
 #[derive(Debug)]

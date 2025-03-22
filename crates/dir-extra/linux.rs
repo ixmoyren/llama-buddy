@@ -1,8 +1,5 @@
 use crate::BaseDirs;
-use std::env;
-use std::env::home_dir;
-use std::ffi::OsString;
-use std::path::PathBuf;
+use std::{env, env::home_dir, ffi::OsString, path::PathBuf};
 
 pub fn base_dirs() -> Option<BaseDirs> {
     let home = home_dir()?;

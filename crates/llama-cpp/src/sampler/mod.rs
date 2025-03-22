@@ -1,8 +1,12 @@
-use crate::context::Context;
-use crate::token::{LogitBias, Token, TokenDataVec};
-use std::borrow::Borrow;
-use std::ops::{Deref, DerefMut};
-use std::ptr::NonNull;
+use crate::{
+    context::Context,
+    token::{LogitBias, Token, TokenDataVec},
+};
+use std::{
+    borrow::Borrow,
+    ops::{Deref, DerefMut},
+    ptr::NonNull,
+};
 
 pub struct Sampler {
     raw: NonNull<llama_cpp_sys::llama_sampler>,

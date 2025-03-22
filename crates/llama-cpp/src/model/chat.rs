@@ -1,6 +1,8 @@
 use crate::error::{ChatMessageError, ChatTemplateError};
-use std::ffi::{CStr, CString};
-use std::ops::{Deref, DerefMut};
+use std::{
+    ffi::{CStr, CString},
+    ops::{Deref, DerefMut},
+};
 
 #[derive(Debug, Eq, PartialEq, Clone, Hash)]
 pub struct Template(CString);

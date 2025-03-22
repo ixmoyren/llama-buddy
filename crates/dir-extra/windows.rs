@@ -1,17 +1,21 @@
-use std::env::home_dir;
-use std::ffi::{c_void, OsString};
-use std::os::windows::ffi::OsStrExt;
-use std::path::PathBuf;
-use std::{ptr, slice};
+use std::{
+    env::home_dir,
+    ffi::{OsString, c_void},
+    os::windows::ffi::OsStrExt,
+    path::PathBuf,
+    ptr, slice,
+};
 
 use crate::BaseDirs;
-use windows_sys::core::GUID;
-use windows_sys::core::PWSTR;
-use windows_sys::Win32::Foundation::S_OK;
-use windows_sys::Win32::Globalization::lstrlenW;
-use windows_sys::Win32::System::Com::CoTaskMemFree;
-use windows_sys::Win32::UI::Shell;
-use windows_sys::Win32::UI::Shell::KF_FLAG_DONT_VERIFY;
+use windows_sys::{
+    Win32::{
+        Foundation::S_OK,
+        Globalization::lstrlenW,
+        System::Com::CoTaskMemFree,
+        UI::{Shell, Shell::KF_FLAG_DONT_VERIFY},
+    },
+    core::{GUID, PWSTR},
+};
 
 pub fn base_dirs() -> Option<BaseDirs> {
     let home = home_dir()?;

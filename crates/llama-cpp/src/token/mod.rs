@@ -2,12 +2,13 @@ mod data;
 mod logit_bias;
 
 use crate::error::TokenTypeConversionError;
-pub use data::TokenData;
-pub use data::TokenDataVec;
+pub use data::{TokenData, TokenDataVec};
 use enumflags2::{BitFlags, bitflags};
 pub use logit_bias::LogitBias;
-use std::fmt::Display;
-use std::ops::{Deref, DerefMut};
+use std::{
+    fmt::Display,
+    ops::{Deref, DerefMut},
+};
 
 /// `llama_token` 包装
 #[repr(transparent)]

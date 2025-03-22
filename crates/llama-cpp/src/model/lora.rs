@@ -1,5 +1,7 @@
-use std::ops::{Deref, DerefMut};
-use std::ptr::NonNull;
+use std::{
+    ops::{Deref, DerefMut},
+    ptr::NonNull,
+};
 
 /// `llama_adapter_lora` 的包装
 /// 基于 LoRA（Low-Rank Adaptation）技术实现的、专为 LLaMA 系列大语言模型设计的参数高效微调模块

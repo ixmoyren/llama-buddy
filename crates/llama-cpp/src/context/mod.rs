@@ -6,11 +6,15 @@ pub use cache::*;
 pub use params::*;
 pub use perf::Perf;
 
-use crate::batch::Batch;
-use crate::error::{DecodeError, EncodeError};
-use std::fmt::{Debug, Formatter};
-use std::num::NonZeroI32;
-use std::ptr::NonNull;
+use crate::{
+    batch::Batch,
+    error::{DecodeError, EncodeError},
+};
+use std::{
+    fmt::{Debug, Formatter},
+    num::NonZeroI32,
+    ptr::NonNull,
+};
 
 /// Safe wrapper around `llama_context`.
 pub struct Context {

@@ -1,7 +1,9 @@
-use std::ffi::{CStr, CString};
-use std::ops::{Deref, DerefMut};
-use std::os::raw::c_char;
-use std::slice;
+use std::{
+    ffi::{CStr, CString},
+    ops::{Deref, DerefMut},
+    os::raw::c_char,
+    slice,
+};
 
 #[derive(Debug, Clone, Copy)]
 #[repr(transparent)]

@@ -1,6 +1,4 @@
-use std::ffi::NulError;
-use std::num::TryFromIntError;
-use std::str::Utf8Error;
+use std::{ffi::NulError, num::TryFromIntError, str::Utf8Error};
 use thiserror::Error;
 
 #[derive(Debug, Eq, PartialEq, Error)]

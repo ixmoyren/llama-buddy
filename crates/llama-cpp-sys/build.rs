@@ -3,11 +3,13 @@ use bindgen::{RustEdition, RustTarget};
 use cmake::Config;
 use fs::{copy, remove_file};
 use glob::glob;
-use std::cmp::PartialEq;
-use std::fs::rename;
-use std::path::{Path, PathBuf};
-use std::process::Command;
-use std::{env, fs};
+use std::{
+    cmp::PartialEq,
+    env, fs,
+    fs::rename,
+    path::{Path, PathBuf},
+    process::Command,
+};
 
 /// llama.cpp 构建类型，默认是 Release
 #[derive(Debug, Default, Eq, PartialEq)]

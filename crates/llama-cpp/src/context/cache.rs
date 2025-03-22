@@ -2,8 +2,7 @@
 
 use super::Context;
 use crate::error::KvCacheConversionError;
-use std::ffi::c_int;
-use std::num::NonZeroU8;
+use std::{ffi::c_int, num::NonZeroU8};
 
 impl Context {
     pub fn copy_cache(&mut self, src: i32, dest: i32, size: i32) {
