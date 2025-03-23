@@ -92,7 +92,7 @@ fn user_dir_map(home: &PathBuf) -> HashMap<String, PathBuf> {
 
     for line in bytes.split(|b| *b == b'\n') {
         // 排除注释
-        if line[..=0] == [b'#'] {
+        if !line.is_empty() && line[..=0] == [b'#'] {
             continue;
         }
         // = 分隔，前面部分为 key，后面部分为 value
