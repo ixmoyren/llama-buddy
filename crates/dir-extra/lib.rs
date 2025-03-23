@@ -94,8 +94,8 @@ pub struct UserDirs {
 }
 
 impl UserDirs {
-    pub fn new() -> Option<UserDirs> {
-        dirs::user_dirs()
+    pub fn new() -> Result<Self, DirsError> {
+        dirs::user_dirs().ok_or(DirsError::NoHomeDir)
     }
 
     pub fn home_dir(&self) -> &Path {
