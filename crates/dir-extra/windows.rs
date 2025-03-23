@@ -1,20 +1,20 @@
 use std::{
     env::home_dir,
-    ffi::{OsString, c_void},
+    ffi::{c_void, OsString},
     os::windows::ffi::OsStrExt,
     path::PathBuf,
     ptr, slice,
 };
 
-use crate::BaseDirs;
+use crate::{BaseDirs, UserDirs};
 use windows_sys::{
+    core::{GUID, PWSTR},
     Win32::{
         Foundation::S_OK,
         Globalization::lstrlenW,
         System::Com::CoTaskMemFree,
         UI::{Shell, Shell::KF_FLAG_DONT_VERIFY},
     },
-    core::{GUID, PWSTR},
 };
 
 pub fn base_dirs() -> Option<BaseDirs> {
@@ -44,6 +44,30 @@ pub fn base_dirs() -> Option<BaseDirs> {
     })
 }
 
+pub fn user_dirs() -> Option<UserDirs> {
+    let home = home_dir()?;
+    let audio = know_guid(Shell::FOLDERID_Music);
+    let desktop = know_guid(Shell::FOLDERID_Desktop);
+    let document = know_guid(Shell::FOLDERID_Documents);
+    let download = know_guid(Shell::FOLDERID_Downloads);
+    let picture = know_guid(Shell::FOLDERID_Pictures);
+    let public = know_guid(Shell::FOLDERID_Public);
+    let video = know_guid(Shell::FOLDERID_Videos);
+    let template = know_guid(Shell::FOLDERID_Templates);
+    Some(UserDirs {
+        home,
+        audio,
+        desktop,
+        document,
+        download,
+        font: None,
+        picture,
+        public,
+        template,
+        video,
+    })
+}
+
 fn from_guid(folder_id: GUID, f: impl FnOnce() -> PathBuf) -> PathBuf {
     unsafe {
         let mut path_ptr: PWSTR = ptr::null_mut();
@@ -62,6 +86,28 @@ fn from_guid(folder_id: GUID, f: impl FnOnce() -> PathBuf) -> PathBuf {
         } else {
             CoTaskMemFree(path_ptr as *const c_void);
             f()
+        }
+    }
+}
+
+fn know_guid(folder_id: GUID) -> Option<PathBuf> {
+    unsafe {
+        let mut path_ptr: PWSTR = ptr::null_mut();
+        let result = Shell::SHGetKnownFolderPath(
+            &folder_id,
+            KF_FLAG_DONT_VERIFY as u32,
+            ptr::null_mut(),
+            &mut path_ptr,
+        );
+        if result == S_OK {
+            let len = lstrlenW(path_ptr) as usize;
+            let path = slice::from_raw_parts(path_ptr, len);
+            let os_str: OsString = OsStrExt::from_wide(path);
+            CoTaskMemFree(path_ptr as *const c_void);
+            Some(PathBuf::from(os_str))
+        } else {
+            CoTaskMemFree(path_ptr as *const c_void);
+            None
         }
     }
 }

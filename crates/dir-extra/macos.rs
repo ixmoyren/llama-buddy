@@ -1,4 +1,4 @@
-use crate::BaseDirs;
+use crate::{BaseDirs, UserDirs};
 use std::env::home_dir;
 
 pub fn base_dirs() -> Option<BaseDirs> {
@@ -23,5 +23,29 @@ pub fn base_dirs() -> Option<BaseDirs> {
         preference,
         runtime,
         state,
+    })
+}
+
+pub fn user_dirs() -> Option<UserDirs> {
+    let home = home_dir()?;
+    let audio = Some(home.join("Music"));
+    let desktop = Some(home.join("Desktop"));
+    let document = Some(home.join("Documents"));
+    let download = Some(home.join("Downloads"));
+    let picture = Some(home.join("Pictures"));
+    let public = Some(home.join("Public"));
+    let video = Some(home.join("Movies"));
+    let font = Some(home.join("Library/Fonts"));
+    Some(UserDirs {
+        home,
+        audio,
+        desktop,
+        document,
+        download,
+        font,
+        picture,
+        public,
+        template: None,
+        video,
     })
 }

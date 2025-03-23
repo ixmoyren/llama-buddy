@@ -79,6 +79,66 @@ impl BaseDirs {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct UserDirs {
+    home: PathBuf,
+    audio: Option<PathBuf>,
+    desktop: Option<PathBuf>,
+    document: Option<PathBuf>,
+    download: Option<PathBuf>,
+    font: Option<PathBuf>,
+    picture: Option<PathBuf>,
+    public: Option<PathBuf>,
+    template: Option<PathBuf>,
+    video: Option<PathBuf>,
+}
+
+impl UserDirs {
+    pub fn new() -> Option<UserDirs> {
+        dirs::user_dirs()
+    }
+
+    pub fn home_dir(&self) -> &Path {
+        self.home.as_path()
+    }
+
+    pub fn audio_dir(&self) -> Option<&Path> {
+        self.audio.as_deref()
+    }
+
+    pub fn desktop_dir(&self) -> Option<&Path> {
+        self.desktop.as_deref()
+    }
+
+    pub fn document_dir(&self) -> Option<&Path> {
+        self.document.as_deref()
+    }
+
+    pub fn download_dir(&self) -> Option<&Path> {
+        self.download.as_deref()
+    }
+
+    pub fn font_dir(&self) -> Option<&Path> {
+        self.font.as_deref()
+    }
+
+    pub fn picture_dir(&self) -> Option<&Path> {
+        self.picture.as_deref()
+    }
+
+    pub fn public_dir(&self) -> Option<&Path> {
+        self.public.as_deref()
+    }
+
+    pub fn template_dir(&self) -> Option<&Path> {
+        self.template.as_deref()
+    }
+
+    pub fn video_dir(&self) -> Option<&Path> {
+        self.video.as_deref()
+    }
+}
+
 #[derive(Debug, Eq, PartialEq, Error)]
 pub enum DirsError {
     #[error("The Home directory is not defined")]
