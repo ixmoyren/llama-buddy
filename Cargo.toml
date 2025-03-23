@@ -11,6 +11,7 @@ license = "MIT OR Apache-2.0"
 tracing = "0.1.41"
 anyhow = "1"
 thiserror = "2"
+dir-extra = { path = "crates/dir-extra" }
 
 [package]
 name = "llama-buddy"
