@@ -1,13 +1,7 @@
 use crate::{BaseDirs, UserDirs};
 use std::{
-    collections::HashMap,
-    env,
-    env::home_dir,
-    ffi::OsString,
-    fs,
-    io::Read,
-    os::unix::ffi::OsStringExt,
-    path::PathBuf,
+    collections::HashMap, env, env::home_dir, ffi::OsString, fs, io::Read,
+    os::unix::ffi::OsStringExt, path::PathBuf,
 };
 
 pub fn base_dirs() -> Option<BaseDirs> {
@@ -101,7 +95,6 @@ fn user_dir_map(home: &PathBuf) -> HashMap<String, PathBuf> {
         if line[..=0] == [b'#'] {
             continue;
         }
-        let mut single_dir_found = false;
         // = 分隔，前面部分为 key，后面部分为 value
         let (key, value) = match split_once(line, b'=') {
             Some(kv) => kv,
