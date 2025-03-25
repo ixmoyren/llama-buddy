@@ -24,13 +24,16 @@ pub static CLIENT: LazyLock<Client> = LazyLock::new(|| {
 
 pub trait ClientExt {
     /// 获取 content-length 和 accept-ranges
-    async fn get_content_length_and_accept_ranges(
+    fn get_content_length_and_accept_ranges(
         &self,
         url: Url,
-    ) -> Result<(Option<u64>, Option<String>), HttpExtraError>;
+    ) -> impl Future<Output = Result<(Option<u64>, Option<String>), HttpExtraError>> + Send;
 
     /// 获取文件
-    async fn fetch_file(&self, download: DownloadParam) -> Result<DownloadSummary, HttpExtraError>;
+    fn fetch_file(
+        &self,
+        download: DownloadParam,
+    ) -> impl Future<Output = Result<DownloadSummary, HttpExtraError>> + Send;
 }
 
 impl ClientExt for Client {
