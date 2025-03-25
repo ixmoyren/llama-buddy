@@ -4,28 +4,37 @@ use reqwest::Url;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Eq, PartialEq)]
-pub struct Download {
+pub struct DownloadParam {
     // 下载路径
-    fetch_from: Url,
+    pub(crate) fetch_from: Url,
     // 保存的文件名
-    file_name: String,
+    pub(crate) file_name: String,
     // 保存的路径
-    save_to: PathBuf,
+    pub(crate) save_to: PathBuf,
     // 重试次数
-    retries: usize,
-    // 是否断点续传
-    resumable: bool,
+    pub(crate) retries: usize,
+    // 读写文件片允许超时时间
+    pub(crate) chunk_timeout: u64,
 }
 
-impl Download {
-    pub fn new(url: Url, file_name: impl AsRef<str>, save_to: impl AsRef<Path>) -> Self {
-        Self {
+impl DownloadParam {
+    pub fn try_new(
+        url: Url,
+        file_name: impl AsRef<str>,
+        save_to: impl AsRef<Path>,
+    ) -> Result<Self, HttpExtraError> {
+        let save_to = save_to.as_ref();
+        // 保存文件的路径存在，但是不是目录，那么直接返回错误
+        if save_to.try_exists()? && !save_to.is_dir() {
+            return Err(HttpExtraError::PathNotDirectory);
+        }
+        Ok(Self {
             fetch_from: url,
             file_name: file_name.as_ref().to_owned(),
-            save_to: save_to.as_ref().to_owned(),
+            save_to: save_to.to_owned(),
             retries: 0,
-            resumable: false,
-        }
+            chunk_timeout: 60,
+        })
     }
 
     pub fn try_new_default_download_dir(
@@ -37,13 +46,7 @@ impl Download {
             .download_dir()
             .ok_or(HttpExtraError::NoDownloadDir)?
             .to_owned();
-        Ok(Self {
-            fetch_from: url,
-            file_name,
-            save_to,
-            retries: 0_usize,
-            resumable: false,
-        })
+        Ok(Self::try_new(url, file_name, save_to)?)
     }
 
     pub fn with_retries(mut self, retries: usize) -> Self {
@@ -51,13 +54,13 @@ impl Download {
         self
     }
 
-    pub fn with_resumable(mut self, resumable: bool) -> Self {
-        self.resumable = resumable;
+    pub fn with_chunk_timeout(mut self, chunk_timeout: u64) -> Self {
+        self.chunk_timeout = chunk_timeout;
         self
     }
 }
 
-impl TryFrom<Url> for Download {
+impl TryFrom<Url> for DownloadParam {
     type Error = HttpExtraError;
     fn try_from(url: Url) -> Result<Self, Self::Error> {
         let filename = url
@@ -94,15 +97,72 @@ impl TryFrom<Url> for Download {
             .ok_or(HttpExtraError::InvalidUrl(format!(
                 "The URL({url}) doesn't contain a valid path, file name is null"
             )))?;
-        Download::try_new_default_download_dir(url, filename)
+        DownloadParam::try_new_default_download_dir(url, filename)
     }
 }
 
-impl TryFrom<&str> for Download {
+impl TryFrom<&str> for DownloadParam {
     type Error = HttpExtraError;
     fn try_from(url: &str) -> Result<Self, Self::Error> {
         let url = Url::parse(url).map_err(|_| HttpExtraError::InvalidUrl(url.to_string()))?;
-        Download::try_from(url)
+        DownloadParam::try_from(url)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum DownloadStatus {
+    // 下载还没有开始
+    NotStarted,
+    // 下载成功
+    Success,
+    // 下载失败
+    Failed(String),
+    // 跳过
+    Skipped(String),
+}
+
+pub struct DownloadSummary {
+    param: DownloadParam,
+    status: DownloadStatus,
+    connet_length: u64,
+    resumable: bool,
+}
+
+impl DownloadSummary {
+    pub fn new(param: DownloadParam) -> Self {
+        Self {
+            param,
+            status: DownloadStatus::NotStarted,
+            connet_length: 0_u64,
+            resumable: false,
+        }
+    }
+
+    pub fn with_status(mut self, status: DownloadStatus) -> Self {
+        self.status = status;
+        self
+    }
+
+    pub fn with_connet_length(mut self, connet_length: u64) -> Self {
+        self.connet_length = connet_length;
+        self
+    }
+
+    pub fn with_resumable(mut self, resumable: bool) -> Self {
+        self.resumable = resumable;
+        self
+    }
+
+    pub fn status(&self) -> DownloadStatus {
+        self.status.clone()
+    }
+
+    pub fn connet_length(&self) -> u64 {
+        self.connet_length
+    }
+
+    pub fn resumable(&self) -> bool {
+        self.resumable
     }
 }
 
@@ -113,16 +173,16 @@ mod tests {
     #[test]
     fn test_try_from_str() {
         let url = "https://www.rust-lang.org/";
-        let download = Download::try_from(url).unwrap();
+        let download = DownloadParam::try_from(url).unwrap();
         assert_eq!(download.file_name, "");
         let url = "https://www.rust-lang.org/test.html";
-        let download = Download::try_from(url).unwrap();
+        let download = DownloadParam::try_from(url).unwrap();
         assert_eq!(download.file_name, "test.html");
         let url = "https://www.rust-lang.org/file=test.html";
-        let download = Download::try_from(url).unwrap();
+        let download = DownloadParam::try_from(url).unwrap();
         assert_eq!(download.file_name, "file_test.html");
         let url = "https://www.rust-lang.org/file1=test1.html&file2=test2.html";
-        let download = Download::try_from(url).unwrap();
+        let download = DownloadParam::try_from(url).unwrap();
         assert_eq!(download.file_name, "file1_test1.html_file2_test2.html");
     }
 }
