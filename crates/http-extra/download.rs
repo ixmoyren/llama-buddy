@@ -3,7 +3,7 @@ use dir_extra::UserDirs;
 use reqwest::Url;
 use std::path::{Path, PathBuf};
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DownloadParam {
     // 下载路径
     pub(crate) fetch_from: Url,
@@ -46,7 +46,7 @@ impl DownloadParam {
             .download_dir()
             .ok_or(HttpExtraError::NoDownloadDir)?
             .to_owned();
-        Ok(Self::try_new(url, file_name, save_to)?)
+        Self::try_new(url, file_name, save_to)
     }
 
     pub fn with_retries(mut self, retries: usize) -> Self {
@@ -121,6 +121,7 @@ pub enum DownloadStatus {
     Skipped(String),
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DownloadSummary {
     param: DownloadParam,
     status: DownloadStatus,
