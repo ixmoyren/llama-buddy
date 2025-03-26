@@ -59,7 +59,6 @@ impl ClientExt for Client {
         let dir = download.save_to.as_path();
         let file_name = download.file_name.as_str();
         let PreconditionFile {
-            file: _,
             path,
             mut temp,
             temp_path,
@@ -101,8 +100,6 @@ impl ClientExt for Client {
 }
 
 struct PreconditionFile {
-    // 保存的文件
-    file: File,
     // 路径
     path: PathBuf,
     // 暂存的文件
@@ -149,7 +146,8 @@ async fn download_dir_precondition(
     };
 
     let path = dir.join(PathBuf::from(&file_name));
-    let file = tokio::fs::OpenOptions::new()
+    // 占位
+    let _ = tokio::fs::OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
@@ -166,7 +164,6 @@ async fn download_dir_precondition(
         .open(&temp_path)
         .await?;
     Ok(PreconditionFile {
-        file,
         path,
         temp,
         temp_path,
