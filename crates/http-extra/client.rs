@@ -18,8 +18,7 @@ pub static CLIENT: LazyLock<Client> = LazyLock::new(|| {
         .pool_max_idle_per_host(32)
         .timeout(Duration::from_secs(30))
         .connect_timeout(Duration::from_secs(10));
-    let client = builder.build().expect("Couldn't build client");
-    client
+    builder.build().expect("Couldn't build client")
 });
 
 pub trait ClientExt {
@@ -64,7 +63,7 @@ impl ClientExt for Client {
             path,
             mut temp,
             temp_path,
-        } = download_dir_precondition(&dir, &file_name).await?;
+        } = download_dir_precondition(dir, file_name).await?;
 
         let mut summary = DownloadSummary::new(download);
 
@@ -157,6 +156,7 @@ async fn download_dir_precondition(
         .read(true)
         .write(true)
         .create(true)
+        .truncate(true)
         .open(&path)
         .await?;
     let temp_name = format!("{file_name}.part");
@@ -165,6 +165,7 @@ async fn download_dir_precondition(
         .read(true)
         .write(true)
         .create(true)
+        .truncate(true)
         .open(&temp_path)
         .await?;
     Ok(PreconditionFile {
