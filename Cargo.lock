@@ -880,6 +880,12 @@ checksum = "23fb14cb19457329c82206317a5663005a4d404783dc74f4252769b0d5f42856"
 [[package]]
 name = "llama-buddy"
 version = "0.1.0"
+dependencies = [
+ "http-extra",
+ "reqwest",
+ "tempfile",
+ "tokio",
+]
 
 [[package]]
 name = "llama-cpp"

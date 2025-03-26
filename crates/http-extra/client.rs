@@ -1,41 +1,17 @@
-use crate::{download::DownloadSummary, DownloadParam, DownloadStatus, HttpExtraError};
+use crate::{download::DownloadSummary, Download, DownloadParam, DownloadStatus, HttpExtraError};
 use reqwest::{
     header::{HeaderMap, ACCEPT_RANGES, CONTENT_LENGTH, RANGE}, Client,
     Url,
 };
-use std::{
-    path::{Path, PathBuf},
-    sync::LazyLock,
-};
+use std::path::{Path, PathBuf};
+
 use tokio::{
     fs::File,
     io::AsyncWriteExt,
     time::{timeout, Duration},
 };
 
-pub static CLIENT: LazyLock<Client> = LazyLock::new(|| {
-    let builder = Client::builder()
-        .pool_max_idle_per_host(32)
-        .timeout(Duration::from_secs(30))
-        .connect_timeout(Duration::from_secs(10));
-    builder.build().expect("Couldn't build client")
-});
-
-pub trait ClientExt {
-    /// 获取 content-length 和 accept-ranges
-    fn get_content_length_and_accept_ranges(
-        &self,
-        url: Url,
-    ) -> impl Future<Output = Result<(Option<u64>, Option<String>), HttpExtraError>> + Send;
-
-    /// 获取文件
-    fn fetch_file(
-        &self,
-        download: DownloadParam,
-    ) -> impl Future<Output = Result<DownloadSummary, HttpExtraError>> + Send;
-}
-
-impl ClientExt for Client {
+impl Download for Client {
     async fn get_content_length_and_accept_ranges(
         &self,
         url: Url,
@@ -198,7 +174,15 @@ fn accept_ranges_value(headers: &HeaderMap) -> Option<String> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::str::FromStr;
+    use std::{str::FromStr, sync::LazyLock, time::Duration};
+
+    pub static CLIENT: LazyLock<Client> = LazyLock::new(|| {
+        let builder = Client::builder()
+            .pool_max_idle_per_host(32)
+            .timeout(Duration::from_secs(30))
+            .connect_timeout(Duration::from_secs(10));
+        builder.build().expect("Couldn't build client")
+    });
 
     #[tokio::test]
     async fn test_download() {
