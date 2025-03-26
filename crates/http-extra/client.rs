@@ -200,3 +200,26 @@ fn accept_ranges_value(headers: &HeaderMap) -> Option<String> {
         .and_then(|value| value.to_str().ok())
         .map(|str| str.to_owned())
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use std::str::FromStr;
+
+    #[tokio::test]
+    async fn test_download() {
+        let dir = tempfile::tempdir().unwrap();
+        let url = Url::from_str("https://www.7-zip.org/a/7z2409-linux-x64.tar.xz").unwrap();
+        let filename = "7z2409-linux-x64.tar.gz";
+        let file_path = dir.path().join(filename);
+        let download_param = DownloadParam::try_new(url, filename, dir.into_path()).unwrap();
+        let summary = CLIENT.fetch_file(download_param).await.unwrap();
+        let file = tokio::fs::OpenOptions::new()
+            .read(true)
+            .open(&file_path)
+            .await
+            .unwrap();
+        let file_len = file.metadata().await.unwrap().len();
+        assert_eq!(summary.connet_length(), file_len);
+    }
+}
