@@ -68,23 +68,20 @@ impl ClientExt for Client {
         let mut summary = DownloadSummary::new(download);
 
         let mut request = self.get(url.clone());
+        let content_length_and_accept_ranges =
+            self.get_content_length_and_accept_ranges(url).await?;
         let temp_len = temp.metadata().await?.len();
-        if temp_len > 0 {
-            // 如果 temporary 中有长度，判断是否可以断点续传
-            if let (Some(content_length), Some(accept_ranges)) =
-                self.get_content_length_and_accept_ranges(url).await?
-            {
-                let resumable = accept_ranges == "bytes";
-                summary = summary
-                    .with_resumable(resumable)
-                    .with_connet_length(content_length);
-                if content_length == temp_len {
-                    download_dir_after_treatment(path, temp_path).await?;
-                    return Ok(summary.with_status(DownloadStatus::Success));
-                }
-                if resumable {
-                    request = request.header(RANGE, format!("bytes={temp_len}-{content_length}"));
-                }
+        if let (Some(content_length), Some(accept_ranges)) = content_length_and_accept_ranges {
+            let resumable = accept_ranges == "bytes";
+            summary = summary
+                .with_resumable(resumable)
+                .with_connet_length(content_length);
+            if content_length == temp_len {
+                download_dir_after_treatment(path, temp_path).await?;
+                return Ok(summary.with_status(DownloadStatus::Success));
+            }
+            if resumable && temp_len > 0 {
+                request = request.header(RANGE, format!("bytes={temp_len}-{content_length}"));
             }
         }
         let mut response = request.send().await?;
