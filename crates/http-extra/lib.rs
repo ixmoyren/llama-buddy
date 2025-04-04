@@ -1,8 +1,10 @@
 #![feature(return_type_notation)]
+#![feature(let_chains)]
 
 pub mod client;
 mod download;
 mod error;
+mod retry;
 
 pub use download::*;
 pub use error::*;
