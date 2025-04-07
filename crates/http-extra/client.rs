@@ -94,10 +94,10 @@ async fn download_dir_precondition(
     dir: &Path,
     file_name: &str,
 ) -> Result<PreconditionFile, HttpExtraError> {
-    let file_name = if !dir.try_exists()? {
+    let (file_name, need_truncate) = if !dir.try_exists()? {
         // 保存文件的目录不存在，则创建
         tokio::fs::create_dir_all(dir).await?;
-        file_name.to_owned()
+        (file_name.to_owned(), true)
     } else {
         // 保存文件的目录存在，则判断文件是否有重名
         let mut entries = tokio::fs::read_dir(dir).await?;
@@ -111,16 +111,24 @@ async fn download_dir_precondition(
             }
         }
         if count > 0 {
-            // 有重名
-            if let Some(index) = file_name.rfind(".") {
+            // 有重名，需要判断一下占位文件大小
+            // 如果占位的文件大小为 0，那么可以认为是上一次中断，这个时候不需要重命名，继续上一次
+            let file = tokio::fs::OpenOptions::new()
+                .read(true)
+                .open(dir.join(file_name))
+                .await?;
+            let file_len = file.metadata().await?.len();
+            if file_len == 0 {
+                (file_name.to_owned(), false)
+            } else if let Some(index) = file_name.rfind(".") {
                 let (left, right) = file_name.split_at(index);
-                format!("{left}_({count}){right}")
+                (format!("{left}_({count}){right}"), true)
             } else {
-                format!("{file_name}_({count})")
+                (format!("{file_name}_({count})"), true)
             }
         } else {
             // 没有重名
-            file_name.to_owned()
+            (file_name.to_owned(), true)
         }
     };
 
@@ -130,7 +138,7 @@ async fn download_dir_precondition(
         .read(true)
         .write(true)
         .create(true)
-        .truncate(true)
+        .truncate(need_truncate)
         .open(&path)
         .await?;
     let temp_name = format!("{file_name}.part");
@@ -139,7 +147,7 @@ async fn download_dir_precondition(
         .read(true)
         .write(true)
         .create(true)
-        .truncate(true)
+        .truncate(need_truncate)
         .open(&temp_path)
         .await?;
     Ok(PreconditionFile {
