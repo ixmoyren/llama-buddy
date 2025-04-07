@@ -4,7 +4,7 @@
 pub mod client;
 mod download;
 mod error;
-mod retry;
+pub mod retry;
 
 pub use download::*;
 pub use error::*;
