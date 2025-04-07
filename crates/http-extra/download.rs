@@ -3,6 +3,24 @@ use dir_extra::UserDirs;
 use reqwest::Url;
 use std::path::{Path, PathBuf};
 
+pub trait Download {
+    /// 获取 content-length 和 accept-ranges
+    async fn get_content_length_and_accept_ranges(
+        &self,
+        url: Url,
+    ) -> Result<(Option<u64>, Option<String>), HttpExtraError>;
+
+    /// 获取文件
+    async fn fetch_file(&self, download: DownloadParam) -> Result<DownloadSummary, HttpExtraError>;
+}
+
+pub async fn spawn<D>(client: D, param: DownloadParam) -> Result<DownloadSummary, HttpExtraError>
+where
+    D: Download,
+{
+    client.fetch_file(param).await
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DownloadParam {
     // 下载路径

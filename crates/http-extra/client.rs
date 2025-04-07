@@ -1,4 +1,7 @@
-use crate::{download::DownloadSummary, Download, DownloadParam, DownloadStatus, HttpExtraError};
+use crate::{
+    download::{Download, DownloadParam, DownloadStatus, DownloadSummary},
+    HttpExtraError,
+};
 use reqwest::{
     header::{HeaderMap, ACCEPT_RANGES, CONTENT_LENGTH, RANGE}, Client,
     Url,
@@ -174,6 +177,7 @@ fn accept_ranges_value(headers: &HeaderMap) -> Option<String> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::download::DownloadParam;
     use std::{str::FromStr, sync::LazyLock, time::Duration};
 
     pub static CLIENT: LazyLock<Client> = LazyLock::new(|| {

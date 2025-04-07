@@ -1,4 +1,4 @@
-use http_extra::DownloadParam;
+use http_extra::{download, download::DownloadParam, retry, retry::strategy::FibonacciBackoff};
 use reqwest::{Client, Url};
 use std::{str::FromStr, time::Duration};
 
@@ -16,10 +16,9 @@ async fn main() {
     let file_path = dir.path().join(filename);
     let param = DownloadParam::try_new(url, filename, dir.into_path()).unwrap();
     // 重试策略，使用 Fibonacci，并且重试 5 次
-    let fibonacci_backoff =
-        http_extra::retry::strategy::FibonacciBackoff::from_millis(1000).take(5);
-    let summary = http_extra::retry::spawn(fibonacci_backoff, async || {
-        http_extra::download(client.clone(), param.clone()).await
+    let fibonacci_backoff = FibonacciBackoff::from_millis(1000).take(5);
+    let summary = retry::spawn(fibonacci_backoff, async || {
+        download::spawn(client.clone(), param.clone()).await
     })
     .await
     .unwrap();
