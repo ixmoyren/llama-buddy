@@ -27,3 +27,5 @@ tokio = { workspace = true }
 http-extra = { workspace = true }
 tempfile = { workspace = true }
 reqwest = { workspace = true, features = ["http2", "gzip", "rustls-tls"] }
+tracing = { workspace = true }
+tracing-subscriber = "0.3.19"

@@ -13,6 +13,7 @@ use tokio::{
     io::AsyncWriteExt,
     time::{timeout, Duration},
 };
+use tracing::{debug, error};
 
 impl Download for Client {
     async fn get_content_length_and_accept_ranges(
@@ -55,6 +56,9 @@ impl Download for Client {
                 .with_resumable(resumable)
                 .with_connet_length(content_length);
             if content_length == temp_len {
+                debug!(
+                    "The size of the temporary file is the same as the size of the remote file. Just only need to do some post-processing related to the file."
+                );
                 download_dir_after_treatment(path, temp_path).await?;
                 return Ok(summary.with_status(DownloadStatus::Success));
             }
@@ -64,6 +68,7 @@ impl Download for Client {
         }
         let mut response = request.send().await?;
         if !response.status().is_success() {
+            error!("The response was abnormal during byte transmission.");
             return Ok(summary.with_status(DownloadStatus::Failed("Response exception".to_owned())));
         }
         let chunk_timeout = Duration::from_secs(chunk_timeout);
@@ -119,6 +124,7 @@ async fn download_dir_precondition(
                 .await?;
             let file_len = file.metadata().await?.len();
             if file_len == 0 {
+                debug!("The file is not downloaded and does not need to be truncated.");
                 (file_name.to_owned(), false)
             } else if let Some(index) = file_name.rfind(".") {
                 let (left, right) = file_name.split_at(index);

@@ -13,7 +13,11 @@ pub async fn spawn<T, E>(
             Err(err) => {
                 if let Some(duration) = strategy.next() {
                     tokio::time::sleep(duration).await;
+                    tracing::warn!("Future execution failed, starting retry!");
                 } else {
+                    tracing::warn!(
+                        "Future execution failed, the maximum number of retries was reached!"
+                    );
                     return Err(err);
                 }
             }

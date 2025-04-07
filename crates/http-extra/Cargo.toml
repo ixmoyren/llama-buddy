@@ -12,6 +12,7 @@ dir-extra = { workspace = true }
 form_urlencoded = "1.2.1"
 rand = "0.9.0"
 reqwest = { workspace = true, features = ["http2", "gzip", "rustls-tls"] }
+tracing = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 

@@ -1,9 +1,18 @@
-use http_extra::{download, download::DownloadParam, retry, retry::strategy::FibonacciBackoff};
+use http_extra::{
+    download,
+    download::{DownloadParam, DownloadStatus},
+    retry,
+    retry::strategy::FibonacciBackoff,
+};
 use reqwest::{Client, Url};
 use std::{str::FromStr, time::Duration};
+use tracing::Level;
 
 #[tokio::main]
 async fn main() {
+    tracing_subscriber::fmt()
+        .with_max_level(Level::DEBUG)
+        .init();
     let client = Client::builder()
         .pool_max_idle_per_host(32)
         .timeout(Duration::from_secs(30))
@@ -24,11 +33,11 @@ async fn main() {
     })
     .await
     .unwrap();
-    let file = tokio::fs::OpenOptions::new()
+    assert_eq!(summary.status(), DownloadStatus::Success);
+    let file = std::fs::OpenOptions::new()
         .read(true)
         .open(dir_path.join(filename))
-        .await
         .unwrap();
-    let file_len = file.metadata().await.unwrap().len();
+    let file_len = file.metadata().unwrap().len();
     assert_eq!(summary.connet_length(), file_len);
 }
