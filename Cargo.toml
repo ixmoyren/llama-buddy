@@ -8,14 +8,15 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
-tracing = "0.1.41"
 anyhow = "1"
-thiserror = "2"
-tokio = "1"
-reqwest = { version = "0.12", default-features = false, features = ["http2", "macos-system-configuration", "charset", "cookies", "hickory-dns", "rustls-tls"] }
+clap = { version = "4.5", features = ["derive"] }
 dir-extra = { path = "crates/dir-extra" }
 http-extra = { path = "crates/http-extra" }
+reqwest = { version = "0.12", default-features = false, features = ["http2", "macos-system-configuration", "charset", "cookies", "socks", "hickory-dns", "rustls-tls"] }
+thiserror = "2"
 tempfile = "3.19.1"
+tracing = "0.1.41"
+tokio = "1"
 
 [package]
 name = "llama-buddy"
@@ -23,9 +24,14 @@ version = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
-tokio = { workspace = true }
+clap = { workspace = true }
+dir-extra = { workspace = true }
 http-extra = { workspace = true }
-tempfile = { workspace = true }
 reqwest = { workspace = true }
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = { version = "1.0.140", features = ["std"] }
+tempfile = { workspace = true }
+tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = "0.3.19"
+url = { version = "2.5.4", default-features = false, features = ["serde"] }

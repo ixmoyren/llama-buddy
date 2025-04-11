@@ -19,4 +19,6 @@ pub enum HttpExtraError {
     PathNotDirectory,
     #[error(transparent)]
     Elapsed(#[from] Elapsed),
+    #[error(transparent)]
+    HexDecode(#[from] faster_hex::Error),
 }

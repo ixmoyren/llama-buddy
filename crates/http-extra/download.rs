@@ -29,10 +29,8 @@ pub struct DownloadParam {
     pub(crate) file_name: String,
     // 保存的路径
     pub(crate) save_to: PathBuf,
-    // 重试次数
-    pub(crate) retries: usize,
     // 读写文件片允许超时时间
-    pub(crate) chunk_timeout: u64,
+    pub(crate) chunk_timeout: Option<u64>,
 }
 
 impl DownloadParam {
@@ -50,8 +48,7 @@ impl DownloadParam {
             fetch_from: url,
             file_name: file_name.as_ref().to_owned(),
             save_to: save_to.to_owned(),
-            retries: 0,
-            chunk_timeout: 60,
+            chunk_timeout: None,
         })
     }
 
@@ -67,12 +64,7 @@ impl DownloadParam {
         Self::try_new(url, file_name, save_to)
     }
 
-    pub fn with_retries(mut self, retries: usize) -> Self {
-        self.retries = retries;
-        self
-    }
-
-    pub fn with_chunk_timeout(mut self, chunk_timeout: u64) -> Self {
+    pub fn with_chunk_timeout(mut self, chunk_timeout: Option<u64>) -> Self {
         self.chunk_timeout = chunk_timeout;
         self
     }

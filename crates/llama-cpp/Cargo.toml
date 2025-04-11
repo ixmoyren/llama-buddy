@@ -19,4 +19,4 @@ thiserror = { workspace = true }
 [dev-dependencies]
 anyhow = { workspace = true }
 llama-cpp = { path = "." }
-clap = { version = "4.5.32", features = ["derive"] }
+clap = { workspace = true }

@@ -1,8 +1,8 @@
-use std::{iter::Iterator, time::Duration};
+use std::{fmt::Debug, iter::Iterator, time::Duration};
 
 pub mod strategy;
 
-pub async fn spawn<T, E>(
+pub async fn spawn<T, E: Debug>(
     strategy: impl IntoIterator<Item = Duration>,
     action: impl AsyncFn() -> Result<T, E>,
 ) -> Result<T, E> {
@@ -13,10 +13,10 @@ pub async fn spawn<T, E>(
             Err(err) => {
                 if let Some(duration) = strategy.next() {
                     tokio::time::sleep(duration).await;
-                    tracing::warn!("Future execution failed, starting retry!");
+                    tracing::warn!("Future execution failed, starting retry! Error: {err:?}");
                 } else {
                     tracing::warn!(
-                        "Future execution failed, the maximum number of retries was reached!"
+                        "Future execution failed, the maximum number of retries was reached! Error: {err:?}"
                     );
                     return Err(err);
                 }
@@ -25,7 +25,7 @@ pub async fn spawn<T, E>(
     }
 }
 
-pub async fn spawn_if<T, E: Clone>(
+pub async fn spawn_if<T, E: Clone + Debug>(
     strategy: impl IntoIterator<Item = Duration>,
     action: impl AsyncFn() -> Result<T, E>,
     condition: impl Fn(E) -> bool,
@@ -38,8 +38,12 @@ pub async fn spawn_if<T, E: Clone>(
                 if let Some(duration) = strategy.next()
                     && condition(err.clone())
                 {
+                    tracing::warn!("Future execution failed, starting retry! Error: {err:?}");
                     tokio::time::sleep(duration).await;
                 } else {
+                    tracing::warn!(
+                        "Future execution failed, the maximum number of retries was reached! Error: {err:?}"
+                    );
                     return Err(err);
                 }
             }

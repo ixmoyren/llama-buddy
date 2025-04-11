@@ -55,6 +55,10 @@ impl Download for Client {
             summary = summary
                 .with_resumable(resumable)
                 .with_connet_length(content_length);
+            if !resumable {
+                // 服务器不支持断点续传
+                temp.set_len(0).await?;
+            }
             if content_length == temp_len {
                 debug!(
                     "The size of the temporary file is the same as the size of the remote file. Just only need to do some post-processing related to the file."
@@ -71,10 +75,17 @@ impl Download for Client {
             error!("The response was abnormal during byte transmission.");
             return Ok(summary.with_status(DownloadStatus::Failed("Response exception".to_owned())));
         }
-        let chunk_timeout = Duration::from_secs(chunk_timeout);
-        while let Some(chunk) = timeout(chunk_timeout, response.chunk()).await?? {
-            temp.write_all(&chunk).await?;
-            temp.flush().await?;
+        if let Some(chunk_timeout) = chunk_timeout {
+            let chunk_timeout = Duration::from_secs(chunk_timeout);
+            while let Some(chunk) = timeout(chunk_timeout, response.chunk()).await?? {
+                temp.write_all(&chunk).await?;
+                temp.flush().await?;
+            }
+        } else {
+            while let Some(chunk) = response.chunk().await? {
+                temp.write_all(&chunk).await?;
+                temp.flush().await?;
+            }
         }
 
         // 对保存的文件做后处理
