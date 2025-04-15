@@ -65,15 +65,11 @@ async fn main() {
         } = layer;
         let blob_url = format!("/v2/library/{name}/blobs/{}", digest.replace(":", "-"));
         let blob_url = registry.join(blob_url.as_str()).unwrap();
-        let filename = if let Some(file_type) = media_type.rsplit('.').next() {
-            format!("{model_prefix}.{file_type}")
-        } else {
-            digest.replace("sha256:", "")
-        };
+        let filename = file_name(media_type, digest.replace("sha256:", ""));
         let filepath = dir.join(&filename);
         let param = DownloadParam::try_new(blob_url, filename, dir.as_path())
             .unwrap()
-            .with_chunk_timeout(chunk_timeout); 
+            .with_chunk_timeout(chunk_timeout);
         let summary = retry::spawn(fibonacci_backoff.clone(), async || {
             download::spawn(client.clone(), param.clone()).await
         })
@@ -85,6 +81,23 @@ async fn main() {
         if !checksum {
             eprintln!("{digest}: checksum failed");
             std::process::exit(1);
+        }
+    }
+}
+
+fn file_name(media_type: impl AsRef<str>, digest: impl AsRef<str>) -> String {
+    let digest = digest.as_ref();
+    match media_type.as_ref() {
+        "application/vnd.ollama.image.model" => format!("model-{digest}.gguf"),
+        "application/vnd.ollama.image.template" => format!("template-{digest}.txt"),
+        "application/vnd.ollama.image.license" => format!("license-{digest}.txt"),
+        "application/vnd.ollama.image.params" => format!("params-{digest}.json"),
+        media => {
+            if let Some(file_type) = media.rsplit('.').next() {
+                format!("{file_type}-{digest}.txt")
+            } else {
+                digest.to_owned()
+            }
         }
     }
 }
@@ -117,9 +130,12 @@ struct Args {
     proxy: Option<String>,
     #[arg(short = 't', long = "timeout", help = "Timeout in seconds")]
     timeout: Option<u64>,
-    #[arg(long = "chunk_timeout", help = "Controls the timeout period for file slice writes")]
+    #[arg(
+        long = "chunk_timeout",
+        help = "Controls the timeout period for file slice writes"
+    )]
     chunk_timeout: Option<u64>,
-    #[arg(long = "retry", default_value = "5",  help = "Retry times")]
+    #[arg(long = "retry", default_value = "5", help = "Retry times")]
     retry: usize,
 }
 
