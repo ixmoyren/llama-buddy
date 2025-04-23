@@ -1,7 +1,6 @@
 use std::{
-    ffi::{CStr, CString},
+    ffi::{c_char, CStr, CString},
     ops::{Deref, DerefMut},
-    os::raw::c_char,
     slice,
 };
 

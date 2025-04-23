@@ -48,12 +48,12 @@ fn main() -> anyhow::Result<()> {
     // 从文件中加载模型
     let model = runtime
         .load_model_from_file(mode_path, &model_params)
-        .context("Failed to load model from file")?;
+        .context("Failed to load model from the path")?;
 
     // 获取模型的词汇表
     let vocab = model.vocab();
     // 提供提示词
-    let prompt = "Hello my nam is";
+    let prompt = "Hello my name is";
     // 对提示词进行分词
     let tokens = vocab.tokenize(prompt, true, true)?;
 
@@ -77,7 +77,7 @@ fn main() -> anyhow::Result<()> {
     for token in &tokens {
         let token_str = vocab.token_to_piece(token, 0, true)?;
         // 打印令牌对应的字符串
-        println!("{token_str}");
+        print!("{token_str}");
     }
 
     // 记录主循环开始的时间

@@ -10,7 +10,7 @@ use crate::{
     token::{Token, TokenData, TokenDataVec},
 };
 use std::{
-    ffi::{CString, c_char},
+    ffi::{CString, c_char, c_void},
     path::{Path, PathBuf},
     ptr::NonNull,
     slice,
@@ -95,8 +95,8 @@ impl Runtime {
     pub fn void_logs(&mut self) {
         unsafe extern "C" fn void_log(
             _level: llama_cpp_sys::ggml_log_level,
-            _text: *const std::os::raw::c_char,
-            _user_data: *mut std::os::raw::c_void,
+            _text: *const c_char,
+            _user_data: *mut c_void,
         ) {
         }
 

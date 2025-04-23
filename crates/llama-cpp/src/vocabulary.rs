@@ -3,11 +3,10 @@ use crate::{
     token::Token,
 };
 use std::{
-    ffi::{CStr, CString},
+    ffi::{c_char, CString},
     ops::{Deref, DerefMut},
-    os::raw::c_char,
     ptr,
-    ptr::{NonNull, slice_from_raw_parts},
+    ptr::{slice_from_raw_parts, NonNull},
 };
 
 /// `llama_vocab` 的包装
@@ -60,7 +59,7 @@ impl Vocabulary {
     ) -> Result<String, TokenToPieceError> {
         // 提供一个初始缓冲区
         let mut buf_size = 256;
-        let mut buf = Vec::<c_char>::with_capacity(buf_size);
+        let mut buf = vec![0_u8; buf_size];
 
         let vocab = self.raw_mut();
         let token = token.raw();
@@ -69,7 +68,7 @@ impl Vocabulary {
             llama_cpp_sys::llama_token_to_piece(
                 vocab,
                 token,
-                buf.as_mut_ptr(),
+                buf.as_mut_ptr() as *mut c_char,
                 buf_size as i32,
                 lstrip,
                 special,
@@ -79,12 +78,12 @@ impl Vocabulary {
         // 缓冲区太小，调整大小重试
         if piece_len < 0 {
             buf_size = usize::try_from(-piece_len)?;
-            buf = Vec::<c_char>::with_capacity(buf_size);
+            buf = vec![0u8; buf_size];
             piece_len = unsafe {
                 llama_cpp_sys::llama_token_to_piece(
                     vocab,
                     token,
-                    buf.as_mut_ptr(),
+                    buf.as_mut_ptr() as *mut c_char,
                     buf_size as i32,
                     lstrip,
                     special,
@@ -93,12 +92,17 @@ impl Vocabulary {
             if piece_len < 0 {
                 return Err(TokenToPieceError::BufferTooSmall(piece_len));
             }
-            unsafe {
-                buf.set_len(piece_len as usize);
-            }
         }
-        let c_str = unsafe { CStr::from_ptr(buf.as_mut_ptr()) };
-        Ok(c_str.to_str()?.to_owned())
+
+        if piece_len == 0 {
+            return Err(TokenToPieceError::UnknownTokenType);
+        }
+
+        unsafe {
+            buf.set_len(piece_len as usize);
+        }
+        let str = String::from_utf8_lossy(&buf).to_string();
+        Ok(str)
     }
 
     pub fn tokenize(
@@ -174,14 +178,14 @@ impl Vocabulary {
 
         // 提供一个初始缓冲区
         let mut buf_size = 256;
-        let mut buf = Vec::<c_char>::with_capacity(buf_size);
+        let mut buf = vec![0_u8; buf_size];
 
         let mut de_tokenize_len = unsafe {
             llama_cpp_sys::llama_detokenize(
                 vocab,
                 tokens,
                 token_len as i32,
-                buf.as_mut_ptr(),
+                buf.as_mut_ptr() as *mut c_char,
                 buf_size as i32,
                 remove_special,
                 unparse_special,
@@ -191,13 +195,13 @@ impl Vocabulary {
         // 缓冲区太小，调整大小重试
         if de_tokenize_len < 0 {
             buf_size = usize::try_from(-de_tokenize_len)?;
-            buf = Vec::<c_char>::with_capacity(buf_size);
+            buf = vec![0_u8; buf_size];
             de_tokenize_len = unsafe {
                 llama_cpp_sys::llama_detokenize(
                     vocab,
                     tokens,
                     token_len as i32,
-                    buf.as_mut_ptr(),
+                    buf.as_mut_ptr() as *mut c_char,
                     buf_size as i32,
                     remove_special,
                     unparse_special,
@@ -206,12 +210,17 @@ impl Vocabulary {
             if de_tokenize_len < 0 {
                 return Err(DeTokenizeError::BufferTooSmall(de_tokenize_len));
             }
-            unsafe {
-                buf.set_len(de_tokenize_len as usize);
-            }
         }
-        let c_str = unsafe { CStr::from_ptr(buf.as_mut_ptr()) };
-        Ok(c_str.to_str()?.to_owned())
+
+        if de_tokenize_len == 0 {
+            return Err(DeTokenizeError::UnknownTokenType);
+        }
+
+        unsafe {
+            buf.set_len(de_tokenize_len as usize);
+        }
+        let str = String::from_utf8_lossy(&buf).to_string();
+        Ok(str)
     }
 }
 

@@ -23,6 +23,8 @@ pub enum TokenizeError {
 pub enum TokenToPieceError {
     #[error("Buffer size({0}) too small")]
     BufferTooSmall(i32),
+    #[error("Unknown Token Type")]
+    UnknownTokenType,
     #[error(transparent)]
     TryFromInt(#[from] TryFromIntError),
     #[error(transparent)]
@@ -33,6 +35,8 @@ pub enum TokenToPieceError {
 pub enum DeTokenizeError {
     #[error("Buffer size({0}) too small")]
     BufferTooSmall(i32),
+    #[error("Unknown Token Type")]
+    UnknownTokenType,
     #[error(transparent)]
     TryFromInt(#[from] TryFromIntError),
     #[error(transparent)]
