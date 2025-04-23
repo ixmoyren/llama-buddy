@@ -1,5 +1,4 @@
 #![feature(return_type_notation)]
-#![feature(let_chains)]
 
 pub mod client;
 pub mod download;
