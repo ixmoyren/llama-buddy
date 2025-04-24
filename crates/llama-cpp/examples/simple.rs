@@ -99,11 +99,12 @@ fn main() -> anyhow::Result<()> {
         let token = sampler.sample(context, -1);
         // 将令牌转换成字符串
         let token_str = &vocab.token_to_piece(&token, 0, true)?;
-        println!("{token_str}");
+        print!("{token_str}");
         // 为下一个批次准备一个新的令牌
         batch = Batch::get_one(&[token])?;
         decode_num += 1;
     }
+    println!();
     let end = ggml_time_us();
     println!(
         "decoded {decode_num} tokens in {} s, speed: {} t/s",

@@ -9,8 +9,8 @@ pub struct Batch {
 }
 
 impl Batch {
-    pub fn logits(&self) -> &[i32] {
-        self.initialized_logits.as_slice()
+    pub fn logits(&self) -> &Vec<i32> {
+        self.initialized_logits.as_ref()
     }
 
     pub fn raw(&self) -> llama_cpp_sys::llama_batch {
@@ -80,7 +80,7 @@ impl Batch {
 
     #[must_use]
     pub fn new(n_tokens: usize, n_seq_max: i32) -> Self {
-        let n_tokens_i32 = i32::try_from(n_tokens).expect("cannot fit n_tokens into a i32");
+        let n_tokens_i32 = i32::try_from(n_tokens).expect("cannot fit n_tokens into an i32");
         let batch = unsafe { llama_cpp_sys::llama_batch_init(n_tokens_i32, 0, n_seq_max) };
 
         Batch {
@@ -94,13 +94,14 @@ impl Batch {
         if tokens.is_empty() {
             return Err(BatchAddError::EmptyBuffer);
         }
+        let len = i32::try_from(tokens.len())?;
         let batch = unsafe {
             let ptr = tokens.as_ptr() as *mut i32;
-            llama_cpp_sys::llama_batch_get_one(ptr, tokens.len().try_into()?)
+            llama_cpp_sys::llama_batch_get_one(ptr, len)
         };
         let batch = Self {
             allocated: 0,
-            initialized_logits: vec![(tokens.len() - 1).try_into()?],
+            initialized_logits: vec![len - 1],
             raw: batch,
         };
         Ok(batch)
