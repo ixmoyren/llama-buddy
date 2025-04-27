@@ -15,11 +15,12 @@ use crate::{
     vocabulary::Vocabulary,
 };
 use std::{
-    ffi::CString,
+    ffi::{CStr, CString},
     num::NonZeroU16,
     ops::{Deref, DerefMut},
     os::raw::{c_char, c_int},
     path::Path,
+    ptr,
     ptr::NonNull,
 };
 
@@ -279,7 +280,7 @@ impl Model {
         }
     }
 
-    fn get_chat_template_impl(&self, capacity: usize) -> Result<Template, ChatTemplateError> {
+    fn chat_template_impl(&self, capacity: usize) -> Result<Template, ChatTemplateError> {
         let mut chat_temp = vec![b'*'; capacity];
         let chat_name = c"tokenizer.chat_template";
 
@@ -315,11 +316,11 @@ impl Model {
         Ok(template.into())
     }
 
-    pub fn get_chat_template(&self) -> Result<Template, ChatTemplateError> {
-        match self.get_chat_template_impl(200) {
+    pub fn chat_template_by_meta(&self) -> Result<Template, ChatTemplateError> {
+        match self.chat_template_impl(200) {
             Ok(t) => Ok(t),
             Err(ChatTemplateError::RetryWithLargerBuffer(actual_len)) => {
-                match self.get_chat_template_impl(actual_len + 1) {
+                match self.chat_template_impl(actual_len + 1) {
                     Ok(t) => Ok(t),
                     Err(ChatTemplateError::RetryWithLargerBuffer(unexpected_len)) => panic!(
                         "Was told that the template length was {actual_len} but now it's {unexpected_len}"
@@ -329,6 +330,27 @@ impl Model {
             }
             Err(e) => Err(e),
         }
+    }
+
+    pub fn chat_template(&self, name: Option<String>) -> Result<Template, ChatTemplateError> {
+        let key = if let Some(name) = name {
+            let c_str = CString::new(name)?;
+            c_str.as_ptr()
+        } else {
+            ptr::null() as *const c_char
+        };
+
+        let c_str_ptr = unsafe { llama_cpp_sys::llama_model_chat_template(self.raw_mut(), key) };
+
+        if c_str_ptr.is_null() {
+            return Err(ChatTemplateError::NulTemplate);
+        }
+
+        let c_str = unsafe { CStr::from_ptr(c_str_ptr) };
+
+        let template = CString::from(c_str);
+
+        Ok(template.into())
     }
 
     pub fn lora_adapter_init(
@@ -355,60 +377,57 @@ impl Model {
     #[tracing::instrument(skip_all)]
     pub fn apply_chat_template(
         &self,
-        tmpl: &Template,
-        chat: &[Message],
+        template: &Template,
+        chats: &[Message],
         add_ass: bool,
     ) -> Result<String, ApplyChatTemplateError> {
-        // Buffer is twice the length of messages per their recommendation
-        let message_length = chat.iter().fold(0, |acc, c| {
+        // 预设缓冲区长度为全部信息字符长度的两倍
+        let message_length = chats.iter().fold(0, |acc, c| {
             acc + c.role.to_bytes().len() + c.content.to_bytes().len()
         });
-        let mut buff: Vec<u8> = vec![0; message_length * 2];
+        let mut buff = vec![0_u8; message_length * 2];
 
-        // Build our llama_cpp_sys_2 chat messages
-        let chat: Vec<llama_cpp_sys::llama_chat_message> = chat
+        let chats = chats
             .iter()
-            .map(|c| llama_cpp_sys::llama_chat_message {
-                role: c.role.as_ptr(),
-                content: c.content.as_ptr(),
-            })
-            .collect();
-
-        let tmpl_ptr = tmpl.as_ptr();
-
+            .map(Into::into)
+            .collect::<Vec<llama_cpp_sys::llama_chat_message>>();
+        let tmpl_ptr = template.as_ptr();
+        let buff_len = i32::try_from(buff.len())?;
         let res = unsafe {
             llama_cpp_sys::llama_chat_apply_template(
                 tmpl_ptr,
-                chat.as_ptr(),
-                chat.len(),
+                chats.as_ptr(),
+                chats.len(),
                 add_ass,
-                buff.as_mut_ptr().cast::<c_char>(),
-                buff.len().try_into()?,
+                buff.as_mut_ptr() as *mut c_char,
+                buff_len,
             )
         };
 
-        if res > buff.len().try_into()? {
-            let new_len = res
-                .try_into()
-                .map_err(|_| ApplyChatTemplateError::ResUnreasonable)?;
-            buff.resize(new_len, 0);
-            let res = unsafe {
+        // 从 llama-cpp 中可知返回 -1 是遇到了无法处理的的模板类型
+        if res == -1 {
+            return Err(ApplyChatTemplateError::UnknownTemplate);
+        }
+
+        // 缓冲区过小，结果有被截断，重新申请一个缓冲区，重新调用 llama_chat_apply_template 方法
+        if res > buff_len {
+            let new_len =
+                usize::try_from(res).map_err(|_| ApplyChatTemplateError::ResUnreasonable)?;
+            buff.resize(new_len, 0_u8);
+            let _res = unsafe {
                 llama_cpp_sys::llama_chat_apply_template(
                     tmpl_ptr,
-                    chat.as_ptr(),
-                    chat.len(),
+                    chats.as_ptr(),
+                    chats.len(),
                     add_ass,
-                    buff.as_mut_ptr().cast::<c_char>(),
+                    buff.as_mut_ptr() as *mut c_char,
                     buff.len().try_into()?,
                 )
             };
-            assert_eq!(Ok(res), buff.len().try_into());
         }
 
-        buff.truncate(
-            res.try_into()
-                .map_err(|_| ApplyChatTemplateError::ResUnreasonable)?,
-        );
+        let len = usize::try_from(res).map_err(|_| ApplyChatTemplateError::ResUnreasonable)?;
+        buff.truncate(len);
 
         Ok(String::from_utf8(buff)?)
     }

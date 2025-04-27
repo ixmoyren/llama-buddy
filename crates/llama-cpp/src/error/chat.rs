@@ -13,6 +13,8 @@ pub enum ChatTemplateError {
     MissingTemplate(i32),
     #[error("The string should have null byte, {0}")]
     FromBytesWithNul(#[from] FromBytesWithNulError),
+    #[error("The model has no template")]
+    NulTemplate,
 }
 
 #[derive(Debug, Eq, PartialEq, Error)]

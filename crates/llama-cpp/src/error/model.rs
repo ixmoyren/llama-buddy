@@ -35,6 +35,8 @@ pub enum ApplyChatTemplateError {
     TryFromInt(#[from] TryFromIntError),
     #[error("Res is negative")]
     ResUnreasonable,
+    #[error("Unsupported template types")]
+    UnknownTemplate,
 }
 
 #[derive(Debug, Eq, PartialEq, Error)]

@@ -57,10 +57,31 @@ pub struct Message {
 }
 
 impl Message {
-    pub fn new(role: impl AsRef<str>, content: impl AsRef<str>) -> Result<Self, ChatMessageError> {
+    pub fn try_new(
+        role: impl AsRef<str>,
+        content: impl AsRef<str>,
+    ) -> Result<Self, ChatMessageError> {
         Ok(Self {
             role: CString::new(role.as_ref())?,
             content: CString::new(content.as_ref())?,
         })
+    }
+}
+
+impl From<Message> for llama_cpp_sys::llama_chat_message {
+    fn from(Message { role, content }: Message) -> Self {
+        Self {
+            role: role.as_ptr(),
+            content: content.as_ptr(),
+        }
+    }
+}
+
+impl From<&Message> for llama_cpp_sys::llama_chat_message {
+    fn from(Message { role, content }: &Message) -> Self {
+        Self {
+            role: role.as_ptr(),
+            content: content.as_ptr(),
+        }
     }
 }

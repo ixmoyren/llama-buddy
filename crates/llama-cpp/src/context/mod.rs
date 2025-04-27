@@ -104,6 +104,10 @@ impl Context {
         let timings = unsafe { llama_cpp_sys::llama_perf_context(self.raw.as_ptr()) };
         timings.into()
     }
+
+    pub fn kv_self_used_cells(&self) -> i32 {
+        unsafe { llama_cpp_sys::llama_kv_self_used_cells(self.raw_mut()) }
+    }
 }
 
 impl Drop for Context {
