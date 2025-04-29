@@ -1,7 +1,13 @@
 use crate::{BaseDirs, UserDirs};
 use std::{
-    collections::HashMap, env, env::home_dir, ffi::OsString, fs, io::Read,
-    os::unix::ffi::OsStringExt, path::PathBuf,
+    collections::HashMap,
+    env,
+    env::home_dir,
+    ffi::OsString,
+    fs,
+    io::Read,
+    os::unix::ffi::OsStringExt,
+    path::{Path, PathBuf},
 };
 
 pub fn base_dirs() -> Option<BaseDirs> {
@@ -70,7 +76,7 @@ fn from_env(var: Option<OsString>, f: impl FnOnce() -> PathBuf) -> PathBuf {
         .unwrap_or_else(f)
 }
 
-fn user_dir_map(home: &PathBuf) -> HashMap<String, PathBuf> {
+fn user_dir_map(home: &Path) -> HashMap<String, PathBuf> {
     let user_dirs_file =
         from_env(env::var_os("XDG_CONFIG_HOME"), || home.join(".config")).join("user-dirs.dirs");
     let user_dirs_file = user_dirs_file.as_path();
