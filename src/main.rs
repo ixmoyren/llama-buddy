@@ -1,4 +1,7 @@
-use clap::Parser;
+use clap::{
+    builder::{styling::AnsiColor, Styles},
+    Parser,
+};
 use http_extra::{download, download::DownloadParam, retry, retry::strategy::FibonacciBackoff};
 use reqwest::{Client, Proxy};
 use serde::Deserialize;
@@ -6,6 +9,12 @@ use serde_json::from_str;
 use std::{path::PathBuf, thread, time::Duration};
 use tracing::{debug, Level};
 use url::Url;
+
+const CLI_HELP_STYLES: Styles = Styles::styled()
+    .header(AnsiColor::Blue.on_default().bold())
+    .usage(AnsiColor::Blue.on_default().bold())
+    .literal(AnsiColor::White.on_default())
+    .placeholder(AnsiColor::Green.on_default());
 
 #[tokio::main]
 async fn main() {
@@ -104,14 +113,14 @@ fn file_name(media_type: impl AsRef<str>, digest: impl AsRef<str>) -> String {
 
 #[derive(Parser)]
 #[command(about = "llama-buddy cli interface for related operations")]
-#[command(version, long_about = None)]
+#[command(version, long_about = None, styles = CLI_HELP_STYLES)]
 struct Args {
-    #[arg(short = 'n', long = "name", help = "The name of the mode")]
+    #[arg(short = 'n', long = "name", help = "The name of mode")]
     name: String,
     #[arg(
         short = 'c',
         long = "category",
-        help = "The category of the mode, If the version of the mode is not provided, the default value is latest"
+        help = "The category of mode, If the version of the mode is not provided, the default value is latest"
     )]
     category: Option<String>,
     #[arg(
@@ -123,7 +132,7 @@ struct Args {
     #[arg(
         short = 'd',
         long = "dest-dir",
-        help = "The location where the model is saved, the default path is `~/.local/share/ollama/model`"
+        help = "The location where model is saved, the default path is `~/.local/share/ollama/model`"
     )]
     dest_dir: Option<PathBuf>,
     #[arg(short = 'p', long = "proxy", help = "Proxy address")]
