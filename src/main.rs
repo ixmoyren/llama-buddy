@@ -1,3 +1,4 @@
+mod init;
 mod pull;
 
 use clap::{
@@ -5,7 +6,10 @@ use clap::{
     Subcommand,
 };
 
-use crate::pull::{pull_model_from_registry, PullArgs};
+use crate::{
+    init::{init_local_registry, InitArgs},
+    pull::{pull_model_from_registry, PullArgs},
+};
 use tracing::Level;
 
 const CLI_HELP_STYLES: Styles = Styles::styled()
@@ -24,7 +28,9 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Pull a model from a registry
+    #[command(about = "Init local registry")]
+    Init(InitArgs),
+    #[command(about = "Pull model from registry")]
     Pull(PullArgs),
 }
 
@@ -35,5 +41,6 @@ async fn main() {
     let cli = Cli::parse();
     match cli.command {
         Commands::Pull(args) => pull_model_from_registry(args).await,
+        Commands::Init(args) => init_local_registry(args).await,
     }
 }
