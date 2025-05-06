@@ -1,4 +1,4 @@
-use anyhow::{Context, anyhow, bail};
+use anyhow::{anyhow, bail, Context};
 use bindgen::{RustEdition, RustTarget};
 use cmake::Config;
 use fs::{copy, remove_file};
@@ -10,6 +10,7 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
 };
+use sys_extra::target::TargetTriple;
 
 /// llama.cpp 构建类型，默认是 Release
 #[derive(Debug, Default, Eq, PartialEq)]
@@ -50,120 +51,6 @@ impl From<&str> for CMakeBuildType {
             "RelWithDebInfo" => RelWithDebInfo,
             _ => panic!("This build type value is not supported!"),
         }
-    }
-}
-
-/// 目标三元组，默认 x86_64_unknown_linux_gnu
-/// https://doc.rust-lang.org/rustc/platform-support.html
-#[derive(Debug, Eq, PartialEq)]
-struct TargetTriple {
-    // 架构
-    architecture: String,
-    // 供应商
-    vendor: String,
-    // 操作系统
-    system: String,
-    // ABI
-    environment: String,
-}
-
-impl Default for TargetTriple {
-    fn default() -> Self {
-        Self::new("x86_64", "unknown", "linux", "gnu")
-    }
-}
-
-impl TargetTriple {
-    fn new(
-        arch: impl AsRef<str>,
-        ven: impl AsRef<str>,
-        sys: impl AsRef<str>,
-        env: impl AsRef<str>,
-    ) -> Self {
-        Self {
-            architecture: arch.as_ref().to_owned(),
-            vendor: ven.as_ref().to_owned(),
-            system: sys.as_ref().to_owned(),
-            environment: env.as_ref().to_owned(),
-        }
-    }
-
-    /// 从环境变量中获取到目标三元组
-    fn parse_from_env() -> anyhow::Result<Self> {
-        // target 样例 x86_64-unknown-linux-gnu
-        let target = env::var("TARGET").context("Failed to obtain env var target!")?;
-        let targets = target.split("-").collect::<Vec<_>>();
-        let architecture = targets.first().map_or("", |s| *s);
-        let vendor = targets.get(1).map_or("", |s| *s);
-        let system = targets.get(2).map_or("", |s| *s);
-        let environment = targets.get(3).map_or("", |s| *s);
-        Ok(Self::new(architecture, vendor, system, environment))
-    }
-
-    /// 通过供应商判断，编译目标是否来自苹果的设备
-    #[inline]
-    fn is_apple(&self) -> bool {
-        self.vendor == "apple"
-    }
-
-    /// 通过供应商和操作系统判断，编译目标是否是 Apple MacOS 系统
-    #[inline]
-    fn is_apple_darwin(&self) -> bool {
-        self.is_apple() && self.system == "darwin"
-    }
-
-    /// 通过操作系统判断，编译目标是否是 Android 系统
-    #[inline]
-    fn is_android(&self) -> bool {
-        self.system.contains("android")
-    }
-
-    /// 通过操作系统和架构判断，编译目标是否 aarch64 平台上的 Android 系统
-    #[inline]
-    fn is_aarch64_android(&self) -> bool {
-        self.is_android() && self.architecture == "aarch64"
-    }
-
-    /// 通过操作系统和架构判断，编译目标是否 armv7 平台上的 Android 系统
-    #[inline]
-    fn is_armv7_android(&self) -> bool {
-        self.is_android() && self.architecture == "armv7"
-    }
-
-    /// 通过操作系统和架构判断，编译目标是否 x86_64 平台上的 Android 系统
-    #[inline]
-    fn is_x86_64_android(&self) -> bool {
-        self.is_android() && self.architecture == "x86_64"
-    }
-
-    /// 通过操作系统和架构判断，编译目标是否 i686 平台上的 Android 系统
-    #[inline]
-    fn is_i686_android(&self) -> bool {
-        self.is_android() && self.architecture == "i686"
-    }
-
-    /// 通过操作系统判断，编译目标是否是 Linux 系统
-    #[inline]
-    fn is_linux(&self) -> bool {
-        self.system == "linux"
-    }
-
-    /// 通过操作系统判断，编译目标是否是 Windows 系统
-    #[inline]
-    fn is_windows(&self) -> bool {
-        self.system == "windows"
-    }
-
-    /// 通过操作系统和 api 判断，编译目标是否是 Windows 系统，并且采用 MSVC 工具链编译
-    #[inline]
-    fn is_windows_msvc(&self) -> bool {
-        self.is_windows() && self.environment == "msvc"
-    }
-
-    /// 通过 api 判断，采用 gnu 工具链编译
-    #[inline]
-    fn is_gnu(&self) -> bool {
-        self.environment == "gnu"
     }
 }
 
@@ -438,7 +325,7 @@ fn main() -> anyhow::Result<()> {
         if target.is_apple_darwin() {
             if let Ok(path) = macos_link_search_path() {
                 println!("cargo:rustc-link-lib=clang_rt.osx");
-                println!("cargo:rustc-link-search={}", path);
+                println!("cargo:rustc-link-search={path}");
             }
         }
     }
@@ -464,7 +351,7 @@ fn extract_lib_names(out_dir: &Path, target: &TargetTriple) -> anyhow::Result<Ve
                     stem_str.strip_prefix("lib").unwrap_or(stem_str)
                 } else {
                     if path.extension() == Some(std::ffi::OsStr::new("a")) {
-                        let target = path.parent().unwrap().join(format!("lib{}.a", stem_str));
+                        let target = path.parent().unwrap().join(format!("lib{stem_str}.a"));
                         rename(&path, &target).context("Failed to rename lib")?;
                     }
                     stem_str
@@ -494,6 +381,6 @@ fn macos_link_search_path() -> anyhow::Result<String> {
     }
 
     Err(anyhow!(
-        "failed to determine link search path, continuing without it"
+        "failed to determine the link search path, continuing without it"
     ))
 }

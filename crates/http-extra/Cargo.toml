@@ -8,7 +8,7 @@ license.workspace = true
 path = "lib.rs"
 
 [dependencies]
-dir-extra = { workspace = true }
+sys-extra = { workspace = true, features = ["dir"] }
 form_urlencoded = "1.2.1"
 faster-hex = "0.10.0"
 memmap2 = "0.9.5"

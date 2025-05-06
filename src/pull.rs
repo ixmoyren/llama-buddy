@@ -6,6 +6,7 @@ use reqwest::{Client, Proxy};
 use serde::Deserialize;
 use serde_json::from_str;
 use std::{path::PathBuf, thread, time::Duration};
+use sys_extra::dir::BaseDirs;
 use tracing::debug;
 use url::Url;
 
@@ -33,7 +34,7 @@ pub async fn pull_model_from_registry(args: PullArgs) {
     let dir = if let Some(dir) = dest_dir {
         dir
     } else {
-        let dirs = dir_extra::BaseDirs::new().unwrap();
+        let dirs = BaseDirs::new().unwrap();
         dirs.data_dir()
             .join("ollama")
             .join("model")

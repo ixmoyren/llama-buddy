@@ -4,7 +4,7 @@ use tokio::time::error::Elapsed;
 #[derive(Debug, Error)]
 pub enum HttpExtraError {
     #[error(transparent)]
-    Dirs(#[from] dir_extra::DirsError),
+    Dirs(#[from] sys_extra::dir::DirsError),
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error("There is no default download directory.")]

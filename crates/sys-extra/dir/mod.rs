@@ -144,6 +144,3 @@ pub enum DirsError {
     #[error("The Home directory is not defined")]
     NoHomeDir,
 }
-
-#[cfg(test)]
-mod tests {}

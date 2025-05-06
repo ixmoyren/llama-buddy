@@ -13,10 +13,11 @@ path = "lib.rs"
 [build-dependencies]
 anyhow = { workspace = true }
 bindgen = "0.71.1"
-cc = { version = "1.2.16", features = ["parallel"] }
+cc = { version = "1.2.21", features = ["parallel"] }
 cmake = "0.1.54"
 find_cuda_helper = "0.2.0"
 glob = "0.3.2"
+sys-extra = { workspace = true, features = ["target"] }
 walkdir = "2.5.0"
 
 [features]

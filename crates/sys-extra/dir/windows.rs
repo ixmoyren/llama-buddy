@@ -6,7 +6,7 @@ use std::{
     ptr, slice,
 };
 
-use crate::{BaseDirs, UserDirs};
+use crate::dir::{BaseDirs, UserDirs};
 use windows_sys::{
     core::{GUID, PWSTR},
     Win32::{

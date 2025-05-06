@@ -10,7 +10,7 @@ license = "MIT OR Apache-2.0"
 [workspace.dependencies]
 anyhow = "1"
 clap = { version = "4.5", features = ["derive", "wrap_help"] }
-dir-extra = { path = "crates/dir-extra" }
+sys-extra = { path = "crates/sys-extra", default-features = false }
 http-extra = { path = "crates/http-extra" }
 reqwest = { version = "0.12", default-features = false, features = ["http2", "macos-system-configuration", "charset", "cookies", "socks", "hickory-dns", "rustls-tls"] }
 thiserror = "2"
@@ -25,7 +25,7 @@ edition = { workspace = true }
 
 [dependencies]
 clap = { workspace = true }
-dir-extra = { workspace = true }
+sys-extra = { workspace = true, features = ["dir", "target"] }
 http-extra = { workspace = true }
 reqwest = { workspace = true }
 serde = { version = "1.0.219", features = ["derive"] }

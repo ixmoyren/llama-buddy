@@ -1,7 +1,7 @@
 use crate::error::HttpExtraError;
-use dir_extra::UserDirs;
 use reqwest::Url;
 use std::path::{Path, PathBuf};
+use sys_extra::dir::UserDirs;
 
 pub trait Download {
     /// 获取 content-length 和 accept-ranges
@@ -78,7 +78,7 @@ impl TryFrom<Url> for DownloadParam {
             .ok_or_else(|| {
                 HttpExtraError::InvalidUrl(format!("The URL({url}) doesn't contain a valid path"))
             })?
-            .last()
+            .next_back()
             .map(|file_name| {
                 // 判断 url 最后一个部分的格式，尝试解码
                 // 如果是 name 形式，那么就是 name

@@ -1,4 +1,4 @@
-use crate::{BaseDirs, UserDirs};
+use crate::dir::{BaseDirs, UserDirs};
 use std::env::home_dir;
 
 pub fn base_dirs() -> Option<BaseDirs> {
