@@ -1,4 +1,4 @@
-use std::{env, env::VarError};
+use std::{env, env::VarError, ops::Deref};
 use thiserror::Error;
 
 /// 目标三元组，默认 x86_64_unknown_linux_gnu
@@ -41,10 +41,10 @@ impl TargetTriple {
         // target 样例 x86_64-unknown-linux-gnu
         let target = env::var("TARGET")?;
         let targets = target.split("-").collect::<Vec<_>>();
-        let architecture = targets.first().map_or("", |s| *s);
-        let vendor = targets.get(1).map_or("", |s| *s);
-        let system = targets.get(2).map_or("", |s| *s);
-        let environment = targets.get(3).map_or("", |s| *s);
+        let architecture = targets.first().map_or("", Deref::deref);
+        let vendor = targets.get(1).map_or("", Deref::deref);
+        let system = targets.get(2).map_or("", Deref::deref);
+        let environment = targets.get(3).map_or("", Deref::deref);
         Ok(Self::new(architecture, vendor, system, environment))
     }
 
