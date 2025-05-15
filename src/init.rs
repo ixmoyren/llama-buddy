@@ -15,15 +15,13 @@ use reqwest::Client;
 use scraper::{ElementRef, Html, Selector};
 use std::{
     collections::VecDeque,
-    env,
-    env::VarError,
     fs,
     fs::{File, create_dir_all},
     path::{Path, PathBuf},
     str::FromStr,
     time::Duration,
 };
-use sys_extra::{dir::BaseDirs, target::TargetTriple};
+use sys_extra::target::TargetTriple;
 use tracing::{debug, info};
 use url::Url;
 use zip::ZipArchive;
@@ -34,6 +32,7 @@ pub async fn init_local_registry(args: InitArgs) -> anyhow::Result<()> {
         path: new_data_path,
         client: http_client_config,
         saved,
+        force,
         ..
     } = args;
     let (
@@ -47,25 +46,20 @@ pub async fn init_local_registry(args: InitArgs) -> anyhow::Result<()> {
             model,
         },
         config_path,
-    ) = get_config_path()?;
-    let data_path = if let Some(data_path) = new_data_path {
-        data_path
-    } else {
-        path
-    };
+    ) = Config::try_config_path()?;
+    let data_path = new_data_path.unwrap_or(path);
     let client_config = if let Some(new) = http_client_config {
         client_config.merge(new)
     } else {
         client_config
     };
-    let remote = if let Some(remote) = new_remote {
-        remote
-    } else {
-        remote
-    };
+    let remote = new_remote.unwrap_or(remote);
     let client = client_config.build_client()?;
     let back_off = client_config.build_back_off();
     let chunk_timeout = client_config.build_chunk_timout();
+    if force {
+        fs::remove_dir_all(data_path.as_path())?
+    }
     // 拉取数据库插件和词库，用于数据库检索
     let sqlite_dir = data_path.join("sqlite");
     let sqlite_plugin_dir = sqlite_dir.join("plugin");
@@ -120,45 +114,6 @@ pub async fn init_local_registry(args: InitArgs) -> anyhow::Result<()> {
     }
     info!("Initialization completed");
     Ok(())
-}
-
-// 从环境变量中获取配置文件路径，并且转换成 Config
-// 1. 如果没有这个变量，那么使用默认的配置变量
-// 2. 如果有提供这个变量，则使用这个变量的路径
-fn get_config_path() -> anyhow::Result<(Config, PathBuf)> {
-    let key = "LLAMA_BUDDY_CONFIG_PATH";
-    match env::var(key) {
-        Ok(val) => {
-            if val.is_empty() {
-                return Err(anyhow!("Empty string isn't allowed"));
-            }
-            let path = PathBuf::from(val);
-            if path.exists() && path.is_dir() {
-                return Err(anyhow!("Dir path isn't allowed"));
-            }
-            let config = Config::read_from_toml(&path)?;
-            Ok((config, path))
-        }
-        Err(VarError::NotPresent) => {
-            let base = BaseDirs::new()?;
-            let config_dir = base.config_dir().join("llama-buddy");
-            if !config_dir.exists() {
-                create_dir_all(config_dir.as_path())?;
-            }
-            let path = config_dir.join("llama-buddy.toml");
-            let config = if !path.exists() {
-                let data_path = base.data_dir().join("llama-buddy");
-                let mut config = Config::default();
-                config.data.path = data_path;
-                config.write_to_toml(path.as_path())?;
-                config
-            } else {
-                Config::read_from_toml(path.as_path())?
-            };
-            Ok((config, path))
-        }
-        Err(e) => Err(anyhow!("Couldn't interpret {key}: {e}")),
-    }
 }
 
 async fn download_sqlite_plugin(
@@ -300,4 +255,9 @@ pub struct InitArgs {
         help = "Save the options provided in the command line to a configuration file"
     )]
     pub saved: bool,
+    #[arg(
+        long = "force",
+        help = "Force initialization will clear all information and rebuild the metadata of the registry"
+    )]
+    pub force: bool,
 }

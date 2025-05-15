@@ -4,13 +4,16 @@ use http_extra::retry::strategy::{ExponentialBackoff, FibonacciBackoff, FixedInt
 use reqwest::{Client as ReqwestClient, Proxy};
 use serde::{Deserialize, Serialize};
 use std::{
-    fs::{File, OpenOptions},
+    env,
+    env::VarError,
+    fs::{File, OpenOptions, create_dir_all},
     io::{Read, Write},
     path::{Path, PathBuf},
     thread,
     time::Duration,
 };
 use sys_extra::dir::BaseDirs;
+use tracing::info;
 use url::Url;
 
 const LLAMA_BUDDY_CONFIG: &str = include_str!("llama-buddy.toml");
@@ -21,7 +24,7 @@ pub async fn output() -> anyhow::Result<()> {
     let data_path = base.data_dir().join("llama-buddy");
     config.data.path = data_path;
     let config_toml = toml::to_string(&config)?;
-    println!("{config_toml}");
+    info!("{config_toml}");
     Ok(())
 }
 
@@ -78,6 +81,48 @@ impl Config {
         let config_toml = toml::to_string(self)?;
         file.write_all(config_toml.as_bytes())?;
         Ok(())
+    }
+
+    // 从环境变量中获取配置文件路径，并且转换成 Config
+    // 1. 如果没有这个变量，那么使用默认的配置变量
+    // 2. 如果有提供这个变量，则使用这个变量的路径
+    pub fn try_config_path() -> Result<(Config, PathBuf), ConfigError> {
+        let key = "LLAMA_BUDDY_CONFIG_PATH";
+        match env::var(key) {
+            Ok(val) => {
+                if val.is_empty() {
+                    return Err(ConfigError::NotAllowedEmptyStr);
+                }
+                let path = PathBuf::from(val);
+                if path.exists() && path.is_dir() {
+                    return Err(ConfigError::NotDir);
+                }
+                let config = Config::read_from_toml(&path)?;
+                Ok((config, path))
+            }
+            Err(VarError::NotPresent) => {
+                let base = BaseDirs::new()?;
+                let config_dir = base.config_dir().join("llama-buddy");
+                if !config_dir.exists() {
+                    create_dir_all(config_dir.as_path())?;
+                }
+                let path = config_dir.join("llama-buddy.toml");
+                let config = if !path.exists() {
+                    let data_path = base.data_dir().join("llama-buddy");
+                    let mut config = Config::default();
+                    config.data.path = data_path;
+                    config.write_to_toml(path.as_path())?;
+                    config
+                } else {
+                    Config::read_from_toml(path.as_path())?
+                };
+                Ok((config, path))
+            }
+            Err(error) => Err(ConfigError::NotInterpret {
+                key: key.to_owned(),
+                error,
+            }),
+        }
     }
 }
 
@@ -228,7 +273,7 @@ impl HttpClient {
         self
     }
 
-    pub fn build_client(&self) -> anyhow::Result<ReqwestClient> {
+    pub fn build_client(&self) -> Result<ReqwestClient, ConfigError> {
         let client_build = ReqwestClient::builder()
             .pool_max_idle_per_host(thread::available_parallelism().map_or(1, |p| p.get()));
         let client_build = if let Some(p) = self.proxy.clone()
