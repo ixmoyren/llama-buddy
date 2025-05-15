@@ -18,6 +18,6 @@ thiserror = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
-llama-cpp = { path = "." }
 clap = { workspace = true }
-rustyline = { version = "15.0.0", default-features = true, features = ["derive"] }
+llama-cpp = { path = "." }
+rustyline = { workspace = true }
