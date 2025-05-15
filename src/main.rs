@@ -1,14 +1,17 @@
+mod config;
+mod db;
+mod error;
 mod init;
 mod pull;
 
-use clap::{
-    builder::{styling::AnsiColor, Styles}, Parser,
-    Subcommand,
-};
-
 use crate::{
-    init::{init_local_registry, InitArgs},
-    pull::{pull_model_from_registry, PullArgs},
+    config::output,
+    init::{InitArgs, init_local_registry},
+    pull::{PullArgs, pull_model_from_registry},
+};
+use clap::{
+    Parser, Subcommand,
+    builder::{Styles, styling::AnsiColor},
 };
 use tracing::Level;
 
@@ -28,6 +31,8 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    #[command(about = "Output the default configuration")]
+    Config,
     #[command(about = "Init local registry")]
     Init(InitArgs),
     #[command(about = "Pull model from registry")]
@@ -35,12 +40,15 @@ enum Commands {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt().with_max_level(Level::INFO).init();
 
     let cli = Cli::parse();
     match cli.command {
+        Commands::Config => output().await?,
+        Commands::Init(args) => init_local_registry(args).await?,
         Commands::Pull(args) => pull_model_from_registry(args).await,
-        Commands::Init(args) => init_local_registry(args).await,
     }
+
+    Ok(())
 }

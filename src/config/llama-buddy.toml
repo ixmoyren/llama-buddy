@@ -1,0 +1,24 @@
+[data]
+path = ""
+
+[registry]
+remote = "https://registry.ollama.com/"
+
+[registry.client]
+proxy = ""
+timeout = 10
+chunk_timeout = 5
+retry = 3
+back_off_strategy = "Fibonacci"
+back_off_time = 10000
+
+[model]
+category = "latest"
+
+[model.client]
+proxy = ""
+timeout = 10
+chunk_timeout = 5
+retry = 3
+back_off_strategy = "Fibonacci"
+back_off_time = 10000
