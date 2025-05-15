@@ -17,12 +17,13 @@ pub struct TargetTriple {
 
 impl Default for TargetTriple {
     fn default() -> Self {
-        Self::new("x86_64", "unknown", "linux", "gnu")
+        let target = target_triple::TARGET;
+        Self::parse_from_str(target)
     }
 }
 
 impl TargetTriple {
-    pub fn new(
+    fn new(
         arch: impl AsRef<str>,
         ven: impl AsRef<str>,
         sys: impl AsRef<str>,
@@ -36,16 +37,22 @@ impl TargetTriple {
         }
     }
 
-    /// 从环境变量中获取到目标三元组
-    pub fn parse_from_env() -> Result<Self, TargetError> {
-        // target 样例 x86_64-unknown-linux-gnu
-        let target = env::var("TARGET")?;
+    fn parse_from_str(target: impl AsRef<str>) -> Self {
+        let target = target.as_ref();
         let targets = target.split("-").collect::<Vec<_>>();
         let architecture = targets.first().map_or("", Deref::deref);
         let vendor = targets.get(1).map_or("", Deref::deref);
         let system = targets.get(2).map_or("", Deref::deref);
         let environment = targets.get(3).map_or("", Deref::deref);
-        Ok(Self::new(architecture, vendor, system, environment))
+        Self::new(architecture, vendor, system, environment)
+    }
+
+    /// 从环境变量中获取到目标三元组
+    pub fn parse_from_env() -> Result<Self, TargetError> {
+        // target 样例 x86_64-unknown-linux-gnu
+        let target = env::var("TARGET")?;
+        let target = Self::parse_from_str(target);
+        Ok(target)
     }
 
     /// 通过供应商判断，编译目标是否来自苹果的设备
@@ -96,10 +103,40 @@ impl TargetTriple {
         self.system == "linux"
     }
 
+    /// 通过操作系统和架构判断，编译目标是否是 x86_64 平台的 Linux 系统
+    #[inline]
+    pub fn is_x86_64_linux(&self) -> bool {
+        self.system == "linux" && self.architecture == "x86_64"
+    }
+
+    /// 通过操作系统和架构判断，编译目标是否是 aarch64 平台的 Linux 系统
+    #[inline]
+    pub fn is_aarch64_linux(&self) -> bool {
+        self.system == "linux" && self.architecture == "aarch64"
+    }
+
     /// 通过操作系统判断，编译目标是否是 Windows 系统
     #[inline]
     pub fn is_windows(&self) -> bool {
         self.system == "windows"
+    }
+
+    /// 通过操作系统和架构判断，编译目标是否是 i686 平台的 Windows 系统
+    #[inline]
+    pub fn is_i686_windows(&self) -> bool {
+        self.system == "windows" && self.architecture == "i686"
+    }
+
+    /// 通过操作系统和架构判断，编译目标是否是 x86_64 平台的 Windows 系统
+    #[inline]
+    pub fn is_x86_64_windows(&self) -> bool {
+        self.system == "windows" && self.architecture == "x86_64"
+    }
+
+    /// 通过操作系统和架构判断，编译目标是否是 aarch64 平台的 Windows 系统
+    #[inline]
+    pub fn is_aarch64_windows(&self) -> bool {
+        self.system == "windows" && self.architecture == "aarch64"
     }
 
     /// 通过操作系统和 api 判断，编译目标是否是 Windows 系统，并且采用 MSVC 工具链编译
