@@ -250,16 +250,8 @@ impl HttpClient {
 
     pub fn build_back_off(&self) -> Box<dyn Iterator<Item = Duration>> {
         use BackOffStrategy::*;
-        let retry = if let Some(retry) = self.retry {
-            retry
-        } else {
-            5
-        };
-        let time_out = if let Some(time_out) = self.back_off_time {
-            time_out
-        } else {
-            10000
-        };
+        let retry = self.retry.unwrap_or(5);
+        let time_out = self.back_off_time.unwrap_or(10000);
         match self.back_off_strategy {
             Some(Fixed) => Box::new(FixedInterval::from_millis(time_out).take(retry)),
             Some(Exponential) => Box::new(ExponentialBackoff::from_millis(time_out).take(retry)),
