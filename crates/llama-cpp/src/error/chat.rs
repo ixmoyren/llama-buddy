@@ -9,7 +9,7 @@ pub enum ChatTemplateError {
     CannotCovertToUtf8(#[from] Utf8Error),
     #[error("The buffer is too small")]
     RetryWithLargerBuffer(usize),
-    #[error("The model has no meta val - returned code, {0}")]
+    #[error("The model has no meta val returned code, {0}")]
     MissingTemplate(i32),
     #[error("The string should have null byte, {0}")]
     FromBytesWithNul(#[from] FromBytesWithNulError),
