@@ -8,14 +8,15 @@ license.workspace = true
 path = "lib.rs"
 
 [dependencies]
-sys-extra = { workspace = true, features = ["dir"] }
+base64ct = { version = "1.7.3", features = ["alloc"] }
 form_urlencoded = "1.2.1"
 faster-hex = "0.10.0"
 memmap2 = "0.9.5"
 rand = "0.9.0"
 reqwest = { workspace = true }
-tracing = { workspace = true }
+sys-extra = { workspace = true, features = ["dir"] }
 sha2 = "0.11.0-pre.5"
+tracing = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 
