@@ -13,6 +13,8 @@ clap = { version = "4.5", features = ["derive", "wrap_help"] }
 sys-extra = { path = "crates/sys-extra", default-features = false }
 http-extra = { path = "crates/http-extra" }
 reqwest = { version = "0.12", default-features = false, features = ["http2", "macos-system-configuration", "charset", "cookies", "socks", "hickory-dns", "rustls-tls"] }
+rusqlite = { git = "https://github.com/rusqlite/rusqlite.git", default-features = true, features = ["bundled"] }
+rustyline = { git = "https://github.com/kkawakam/rustyline.git", default-features = true, features = ["derive"] }
 thiserror = "2"
 tempfile = "3.19.1"
 tracing = "0.1.41"
@@ -24,14 +26,21 @@ version = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
+anyhow = { workspace = true }
 clap = { workspace = true }
-sys-extra = { workspace = true, features = ["dir", "target"] }
 http-extra = { workspace = true }
 reqwest = { workspace = true }
+rusqlite = { workspace = true, features = ["chrono", "uuid"] }
+scraper = "0.23.1"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = { version = "1.0.140", features = ["std"] }
+sys-extra = { workspace = true, features = ["dir", "target"] }
 tempfile = { workspace = true }
+thiserror = { workspace = true }
 tokio = { workspace = true }
+toml = "0.8.22"
 tracing = { workspace = true }
 tracing-subscriber = "0.3.19"
 url = { version = "2.5.4", default-features = false, features = ["serde"] }
+uuid = { version = "1.16.0", features = ["v7"] }
+zip = "3.0.0"
