@@ -9,9 +9,9 @@ name = "scalar_warrper"
 path = "lib.rs"
 
 [dependencies]
-maud = { version = "0.27", features = ["axum"] }
-http = "1"
 axum = "0.8"
+http = "1"
+maud = { version = "0.27", features = ["axum"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 utoipa = { version = "5.3.1", features = ["axum_extras"] }
