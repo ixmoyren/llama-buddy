@@ -40,8 +40,8 @@ pub async fn init_local_registry(args: InitArgs) -> anyhow::Result<()> {
             data: Data { path },
             registry:
                 Registry {
-                    client: client_config,
                     remote,
+                    client: client_config,
                 },
             model,
         },

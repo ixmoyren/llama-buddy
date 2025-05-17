@@ -47,7 +47,7 @@ async fn main() -> anyhow::Result<()> {
     match cli.command {
         Commands::Config => output().await?,
         Commands::Init(args) => init_local_registry(args).await?,
-        Commands::Pull(args) => pull_model_from_registry(args).await,
+        Commands::Pull(args) => pull_model_from_registry(args).await?,
     }
 
     Ok(())
