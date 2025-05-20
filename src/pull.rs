@@ -8,7 +8,6 @@ use clap::Args;
 use http_extra::{download, download::DownloadParam, retry};
 use serde::Deserialize;
 use serde_json::from_str;
-use std::sync::Arc;
 use tracing::debug;
 
 pub async fn pull_model_from_registry(args: PullArgs) -> anyhow::Result<()> {

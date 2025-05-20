@@ -4,16 +4,18 @@ use http_extra::retry::strategy::{ExponentialBackoff, FibonacciBackoff, FixedInt
 use reqwest::{Client as ReqwestClient, Proxy};
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::{HashMap, VecDeque},
     env,
     env::VarError,
     fs::{File, OpenOptions, create_dir_all},
     io::{Read, Write},
     path::{Path, PathBuf},
+    sync::LazyLock,
     thread,
     time::Duration,
 };
 use sys_extra::dir::BaseDirs;
-use tracing::info;
+use toml_edit::{DocumentMut, Table, value};
 use url::Url;
 
 const LLAMA_BUDDY_CONFIG: &str = include_str!("llama-buddy.toml");
@@ -23,8 +25,8 @@ pub async fn output() -> anyhow::Result<()> {
     let base = BaseDirs::new()?;
     let data_path = base.data_dir().join("llama-buddy");
     config.data.path = data_path;
-    let config_toml = toml::to_string(&config)?;
-    info!("{config_toml}");
+    let config_toml = config.display()?;
+    println!("{config_toml}");
     Ok(())
 }
 
@@ -38,7 +40,7 @@ pub struct Config {
 
 impl Default for Config {
     fn default() -> Self {
-        let config = toml::from_str::<Config>(LLAMA_BUDDY_CONFIG);
+        let config = toml_edit::de::from_str::<Config>(LLAMA_BUDDY_CONFIG);
         config.expect("The default configuration doesn't meet the requirements")
     }
 }
@@ -59,12 +61,178 @@ impl Config {
         self
     }
 
+    pub fn display(&self) -> Result<String, ConfigError> {
+        let Self {
+            data: Data { path },
+            registry:
+                Registry {
+                    remote,
+                    client: registry_client,
+                },
+            model:
+                Model {
+                    category,
+                    client: model_client,
+                },
+        } = self;
+        let mut doc = LLAMA_BUDDY_CONFIG
+            .parse::<DocumentMut>()
+            .expect("Invalid config");
+        // 保存 data_path
+        doc["data"]["path"] = value(path.to_str().unwrap_or(""));
+        doc["registry"]["remote"] = value(remote.to_string());
+        doc["model"]["category"] = value(category);
+        if let Some(table) = doc["registry"]["client"].as_table_mut() {
+            Self::client_table(table, registry_client);
+            Self::sort_client_table(table);
+        }
+
+        if let Some(table) = doc["model"]["client"].as_table_mut() {
+            Self::client_table(table, model_client);
+            Self::sort_client_table(table);
+        }
+        Ok(doc.to_string())
+    }
+
+    fn client_table(table: &mut Table, client: &HttpClient) {
+        let HttpClient {
+            proxy,
+            timeout,
+            chunk_timeout,
+            retry,
+            back_off_strategy,
+            back_off_time,
+        } = client;
+        if let Some(time) = back_off_time {
+            let item = table
+                .get_mut("back_off_time")
+                .expect("Invalid config, no back_off_time item");
+            *item = value(*time as i64);
+        }
+
+        if let Some(strategy) = back_off_strategy {
+            let item = table
+                .get_mut("back_off_strategy")
+                .expect("Invalid config, no back_off_strategy item");
+            *item = value(strategy.as_str());
+        }
+
+        if let Some(retry) = retry {
+            let item = table
+                .get_mut("retry")
+                .expect("Invalid config, no retry item");
+            *item = value(*retry as i64);
+        }
+
+        let mut has_chunk_timeout = false;
+        if let Some(chunk_timeout) = chunk_timeout {
+            let _ = table.insert("chunk_timeout", value(*chunk_timeout as i64));
+            has_chunk_timeout = true;
+        }
+
+        let mut has_timeout = false;
+        if let Some(timeout) = timeout {
+            let _ = table.insert("timeout", value(*timeout as i64));
+            has_timeout = true;
+        }
+
+        let mut has_proxy = false;
+        if let Some(proxy) = proxy {
+            let _ = table.insert("proxy", value(proxy));
+            has_proxy = true;
+        }
+
+        let (retry_key, _) = table
+            .get_key_value("retry")
+            .expect("Default config doesn't have any retry_item");
+
+        // 获取注释
+        let retry_decor = retry_key.leaf_decor();
+        let mut retry_decor_lines = retry_decor
+            .prefix()
+            .expect("Invalid config, no retry decor")
+            .as_str()
+            .unwrap_or_default()
+            .split('\n')
+            .map(ToOwned::to_owned)
+            .collect::<VecDeque<String>>();
+
+        if has_proxy {
+            let proxy_decor = retry_decor_lines.pop_front().unwrap_or_default().to_owned() + "\n";
+            let mut proxy_key = table
+                .key_mut("proxy")
+                .expect("Default config doesn't have any proxy_key");
+            let proxy_key_decor = proxy_key.leaf_decor_mut();
+            proxy_key_decor.set_prefix(proxy_decor);
+        };
+
+        if has_timeout {
+            let timout_decor = if has_proxy {
+                retry_decor_lines.pop_front().unwrap_or_default() + "\n"
+            } else {
+                let proxy_decor = retry_decor_lines.pop_front().unwrap_or_default();
+                let timeout_decor = retry_decor_lines.pop_front().unwrap_or_default();
+                format!("{proxy_decor}\n{timeout_decor}\n")
+            };
+            let mut timeout_key = table
+                .key_mut("timeout")
+                .expect("Default config doesn't have any timout_key");
+            let timeout_key_decor = timeout_key.leaf_decor_mut();
+            timeout_key_decor.set_prefix(timout_decor);
+        }
+
+        if has_chunk_timeout {
+            let chunk_timout_decor = match (has_proxy, has_timeout) {
+                (true, true) | (false, true) => {
+                    retry_decor_lines.pop_front().unwrap_or_default() + "\n"
+                }
+                (true, false) => {
+                    let timeout_decor = retry_decor_lines.pop_front().unwrap_or_default();
+                    let chunk_timeout_decor = retry_decor_lines.pop_front().unwrap_or_default();
+                    format!("{timeout_decor}\n{chunk_timeout_decor}\n")
+                }
+                (false, false) => {
+                    let proxy_decor = retry_decor_lines.pop_front().unwrap_or_default();
+                    let timeout_decor = retry_decor_lines.pop_front().unwrap_or_default();
+                    let chunk_timeout_decor = retry_decor_lines.pop_front().unwrap_or_default();
+                    format!("{proxy_decor}\n{timeout_decor}\n{chunk_timeout_decor}\n")
+                }
+            };
+            let mut chunk_timeout_key = table
+                .key_mut("chunk_timeout")
+                .expect("Default config doesn't have any chunk_timeout_key");
+            let timeout_key_decor = chunk_timeout_key.leaf_decor_mut();
+            timeout_key_decor.set_prefix(chunk_timout_decor)
+        }
+
+        let new_retry_decor = retry_decor_lines.iter().fold(String::new(), |mut acc, x| {
+            if !x.is_empty() {
+                acc.push_str(x.as_str());
+                acc.push_str("\n");
+            }
+            acc
+        });
+        let mut retry_key = table
+            .key_mut("retry")
+            .expect("Default config doesn't have any retry_key");
+        let retry_decor = retry_key.leaf_decor_mut();
+        retry_decor.set_prefix(new_retry_decor);
+    }
+
+    fn sort_client_table(table: &mut Table) {
+        table.sort_values_by(|key1, _, key2, _| {
+            let index1 = HTTP_CLIENT_KEY_CMP.get(key1.get()).unwrap_or(&0);
+            let index2 = HTTP_CLIENT_KEY_CMP.get(key2.get()).unwrap_or(&0);
+            index1.cmp(index2)
+        })
+    }
+
     pub fn read_from_toml(path: &Path) -> Result<Config, ConfigError> {
         let mut file = File::open(path)?;
         let mut config = String::new();
         file.read_to_string(&mut config)?;
 
-        let config = toml::from_str::<Config>(config.as_str())?;
+        let config = toml_edit::de::from_str::<Config>(config.as_str())?;
         Ok(config)
     }
 
@@ -78,7 +246,7 @@ impl Config {
             .write(true)
             .truncate(true)
             .open(path)?;
-        let config_toml = toml::to_string(self)?;
+        let config_toml = self.display()?;
         file.write_all(config_toml.as_bytes())?;
         Ok(())
     }
@@ -181,6 +349,17 @@ impl Model {
     }
 }
 
+static HTTP_CLIENT_KEY_CMP: LazyLock<HashMap<&str, usize>> = LazyLock::new(|| {
+    let mut map = HashMap::new();
+    map.insert("proxy", 1_usize);
+    map.insert("timeout", 2_usize);
+    map.insert("chunk_timeout", 3_usize);
+    map.insert("retry", 4_usize);
+    map.insert("back_off_strategy", 5_usize);
+    map.insert("back_off_time", 6_usize);
+    map
+});
+
 /// HTTP 客户端配置
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Args)]
 pub struct HttpClient {
@@ -238,6 +417,16 @@ pub enum BackOffStrategy {
     /// 固定延迟时间回退
     #[value(help = "A backoff strategy with a fixed delay between retries")]
     Fixed,
+}
+
+impl BackOffStrategy {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            BackOffStrategy::Fibonacci => "Fibonacci",
+            BackOffStrategy::Exponential => "Exponential",
+            BackOffStrategy::Fixed => "Fixed",
+        }
+    }
 }
 
 impl HttpClient {
@@ -345,5 +534,189 @@ mod tests {
             config_form_file.registry.remote,
             Url::parse("https://registry.ollama.com").unwrap()
         );
+    }
+
+    #[test]
+    fn display_config_add_proxy() {
+        // 创建一个临时文件夹用来保存文件
+        let mut config = Config::default();
+        config.model.client.back_off_strategy = Some(BackOffStrategy::Exponential);
+        config.model.client.proxy = Some(Url::parse("socket5://127.0.0.1:5555").unwrap().into());
+        let config_str = r#"[data]
+# 数据保存的位置
+path = ""
+
+[registry]
+# 远程仓库的地址
+remote = "https://registry.ollama.com/"
+
+[registry.client]
+# 访问代理设置 proxy = ""
+# 请求超时设置， timeout = 10
+# 块写入磁盘的超时设置，chunk_timeout = 5
+# 重试次数
+retry = 3
+# 重试时使用的时间策略
+back_off_strategy = "Fibonacci"
+# 重试第一次的时间间隔，后续每次重试的时间间隔由上面的策略生成
+back_off_time = 10000
+
+[model]
+# 模型默认提供的版本
+category = "latest"
+
+[model.client]
+# 访问代理设置 proxy = ""
+proxy = "socket5://127.0.0.1:5555"
+# 请求超时设置， timeout = 10
+# 块写入磁盘的超时设置，chunk_timeout = 5
+# 重试次数
+retry = 5
+# 重试时使用的时间策略
+back_off_strategy = "Exponential"
+# 重试第一次的时间间隔，后续每次重试的时间间隔由上面的策略生成
+back_off_time = 10000
+"#;
+        assert_eq!(config_str, config.display().unwrap());
+    }
+
+    #[test]
+    fn display_config_add_timeout() {
+        // 创建一个临时文件夹用来保存文件
+        let mut config = Config::default();
+        config.model.client.back_off_strategy = Some(BackOffStrategy::Exponential);
+        config.model.client.timeout = Some(10);
+        let config_str = r#"[data]
+# 数据保存的位置
+path = ""
+
+[registry]
+# 远程仓库的地址
+remote = "https://registry.ollama.com/"
+
+[registry.client]
+# 访问代理设置 proxy = ""
+# 请求超时设置， timeout = 10
+# 块写入磁盘的超时设置，chunk_timeout = 5
+# 重试次数
+retry = 3
+# 重试时使用的时间策略
+back_off_strategy = "Fibonacci"
+# 重试第一次的时间间隔，后续每次重试的时间间隔由上面的策略生成
+back_off_time = 10000
+
+[model]
+# 模型默认提供的版本
+category = "latest"
+
+[model.client]
+# 访问代理设置 proxy = ""
+# 请求超时设置， timeout = 10
+timeout = 10
+# 块写入磁盘的超时设置，chunk_timeout = 5
+# 重试次数
+retry = 5
+# 重试时使用的时间策略
+back_off_strategy = "Exponential"
+# 重试第一次的时间间隔，后续每次重试的时间间隔由上面的策略生成
+back_off_time = 10000
+"#;
+        assert_eq!(config_str, config.display().unwrap());
+    }
+
+    #[test]
+    fn display_config_add_chunk_timeout() {
+        // 创建一个临时文件夹用来保存文件
+        let mut config = Config::default();
+        config.model.client.back_off_strategy = Some(BackOffStrategy::Exponential);
+        config.model.client.chunk_timeout = Some(5);
+        let config_str = r#"[data]
+# 数据保存的位置
+path = ""
+
+[registry]
+# 远程仓库的地址
+remote = "https://registry.ollama.com/"
+
+[registry.client]
+# 访问代理设置 proxy = ""
+# 请求超时设置， timeout = 10
+# 块写入磁盘的超时设置，chunk_timeout = 5
+# 重试次数
+retry = 3
+# 重试时使用的时间策略
+back_off_strategy = "Fibonacci"
+# 重试第一次的时间间隔，后续每次重试的时间间隔由上面的策略生成
+back_off_time = 10000
+
+[model]
+# 模型默认提供的版本
+category = "latest"
+
+[model.client]
+# 访问代理设置 proxy = ""
+# 请求超时设置， timeout = 10
+# 块写入磁盘的超时设置，chunk_timeout = 5
+chunk_timeout = 5
+# 重试次数
+retry = 5
+# 重试时使用的时间策略
+back_off_strategy = "Exponential"
+# 重试第一次的时间间隔，后续每次重试的时间间隔由上面的策略生成
+back_off_time = 10000
+"#;
+        assert_eq!(config_str, config.display().unwrap());
+    }
+
+    #[test]
+    fn display_config_add_chunk_timeout_and_proxy() {
+        // 创建一个临时文件夹用来保存文件
+        let mut config = Config::default();
+        config.model.client.back_off_strategy = Some(BackOffStrategy::Exponential);
+        config.model.client.proxy = Some(Url::parse("socket5://127.0.0.1:5555").unwrap().into());
+        config.model.client.chunk_timeout = Some(5);
+        config.registry.client.proxy = Some(Url::parse("socket5://127.0.0.1:5555").unwrap().into());
+        config.registry.client.timeout = Some(10);
+        config.registry.client.chunk_timeout = Some(5);
+        let config_str = r#"[data]
+# 数据保存的位置
+path = ""
+
+[registry]
+# 远程仓库的地址
+remote = "https://registry.ollama.com/"
+
+[registry.client]
+# 访问代理设置 proxy = ""
+proxy = "socket5://127.0.0.1:5555"
+# 请求超时设置， timeout = 10
+timeout = 10
+# 块写入磁盘的超时设置，chunk_timeout = 5
+chunk_timeout = 5
+# 重试次数
+retry = 3
+# 重试时使用的时间策略
+back_off_strategy = "Fibonacci"
+# 重试第一次的时间间隔，后续每次重试的时间间隔由上面的策略生成
+back_off_time = 10000
+
+[model]
+# 模型默认提供的版本
+category = "latest"
+
+[model.client]
+# 访问代理设置 proxy = ""
+proxy = "socket5://127.0.0.1:5555"
+# 请求超时设置， timeout = 10
+# 块写入磁盘的超时设置，chunk_timeout = 5
+chunk_timeout = 5
+# 重试次数
+retry = 5
+# 重试时使用的时间策略
+back_off_strategy = "Exponential"
+# 重试第一次的时间间隔，后续每次重试的时间间隔由上面的策略生成
+back_off_time = 10000
+"#;
+        assert_eq!(config_str, config.display().unwrap());
     }
 }

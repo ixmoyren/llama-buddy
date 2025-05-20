@@ -1,24 +1,33 @@
 [data]
+# 数据保存的位置
 path = ""
 
 [registry]
+# 远程仓库的地址
 remote = "https://registry.ollama.com/"
 
 [registry.client]
-proxy = ""
-timeout = 10
-chunk_timeout = 5
+# 访问代理设置 proxy = ""
+# 请求超时设置， timeout = 10
+# 块写入磁盘的超时设置，chunk_timeout = 5
+# 重试次数
 retry = 3
+# 重试时使用的时间策略
 back_off_strategy = "Fibonacci"
+# 重试第一次的时间间隔，后续每次重试的时间间隔由上面的策略生成
 back_off_time = 10000
 
 [model]
+# 模型默认提供的版本
 category = "latest"
 
 [model.client]
-proxy = ""
-timeout = 10
-chunk_timeout = 5
-retry = 3
+# 访问代理设置 proxy = ""
+# 请求超时设置， timeout = 10
+# 块写入磁盘的超时设置，chunk_timeout = 5
+# 重试次数
+retry = 5
+# 重试时使用的时间策略
 back_off_strategy = "Fibonacci"
+# 重试第一次的时间间隔，后续每次重试的时间间隔由上面的策略生成
 back_off_time = 10000

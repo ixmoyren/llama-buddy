@@ -6,9 +6,9 @@ pub enum ConfigError {
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error(transparent)]
-    TomlDe(#[from] toml::de::Error),
+    TomlDe(#[from] toml_edit::de::Error),
     #[error(transparent)]
-    TomlSe(#[from] toml::ser::Error),
+    TomlSe(#[from] toml_edit::ser::Error),
     #[error("No directory allowed here")]
     NotDir,
     #[error("Empty string isn't allowed")]
