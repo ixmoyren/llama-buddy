@@ -1505,6 +1505,7 @@ dependencies = [
  "anyhow",
  "clap",
  "http-extra",
+ "llama-buddy-macro",
  "reqwest",
  "rusqlite",
  "scraper",

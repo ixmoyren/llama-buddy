@@ -1,16 +1,16 @@
 use crate::error::ConfigError;
 use clap::{Args, ValueEnum};
 use http_extra::retry::strategy::{ExponentialBackoff, FibonacciBackoff, FixedInterval};
+use llama_buddy_macro::IndexByField;
 use reqwest::{Client as ReqwestClient, Proxy};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::VecDeque,
     env,
     env::VarError,
     fs::{File, OpenOptions, create_dir_all},
     io::{Read, Write},
     path::{Path, PathBuf},
-    sync::LazyLock,
     thread,
     time::Duration,
 };
@@ -221,9 +221,9 @@ impl Config {
 
     fn sort_client_table(table: &mut Table) {
         table.sort_values_by(|key1, _, key2, _| {
-            let index1 = HTTP_CLIENT_KEY_CMP.get(key1.get()).unwrap_or(&0);
-            let index2 = HTTP_CLIENT_KEY_CMP.get(key2.get()).unwrap_or(&0);
-            index1.cmp(index2)
+            let index1 = HttpClient::index_by_field(key1.get());
+            let index2 = HttpClient::index_by_field(key2.get());
+            index1.cmp(&index2)
         })
     }
 
@@ -349,19 +349,8 @@ impl Model {
     }
 }
 
-static HTTP_CLIENT_KEY_CMP: LazyLock<HashMap<&str, usize>> = LazyLock::new(|| {
-    let mut map = HashMap::new();
-    map.insert("proxy", 1_usize);
-    map.insert("timeout", 2_usize);
-    map.insert("chunk_timeout", 3_usize);
-    map.insert("retry", 4_usize);
-    map.insert("back_off_strategy", 5_usize);
-    map.insert("back_off_time", 6_usize);
-    map
-});
-
 /// HTTP 客户端配置
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Args)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Args, IndexByField)]
 pub struct HttpClient {
     /// 代理
     #[arg(long = "proxy", help = "Proxy address", required = false)]
