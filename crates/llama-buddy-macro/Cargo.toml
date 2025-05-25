@@ -1,0 +1,13 @@
+[package]
+name = "llama-buddy-macro"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+path = "lib.rs"
+proc-macro = true
+
+[dependencies]
+quote = "1"
+syn = "2"
