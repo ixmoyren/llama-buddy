@@ -22,4 +22,6 @@ tokio = { workspace = true, features = ["full"] }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
 

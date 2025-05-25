@@ -18,6 +18,7 @@ rustyline = { git = "https://github.com/kkawakam/rustyline.git", default-feature
 thiserror = "2"
 tempfile = "3.19.1"
 tracing = "0.1.41"
+tracing-subscriber = "0.3.19"
 tokio = "1"
 
 [package]
@@ -40,7 +41,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 toml_edit = { version = "0.22.26", features = ["serde"] }
 tracing = { workspace = true }
-tracing-subscriber = "0.3.19"
+tracing-subscriber = { workspace = true }
 url = { version = "2.5.4", default-features = false, features = ["serde"] }
 uuid = { version = "1.16.0", features = ["v7"] }
-zip = "3.0.0"
+zip = "4.0.0"
