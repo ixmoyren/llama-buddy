@@ -1,4 +1,4 @@
-use anyhow::{anyhow, bail, Context};
+use anyhow::{Context, anyhow, bail};
 use bindgen::{RustEdition, RustTarget};
 use cmake::Config;
 use fs::{copy, remove_file};
@@ -142,6 +142,10 @@ fn main() -> anyhow::Result<()> {
     cmake_config.define("LLAMA_BUILD_SERVER", "OFF");
     // 编译 LLaMA 模型时不生成共享库
     cmake_config.define("BUILD_SHARED_LIBS", "OFF");
+    // 不编译 TOOL 组件
+    cmake_config.define("LLAMA_BUILD_TOOLS", "OFF");
+    // 不编译 LLAMA_CURL 组件
+    cmake_config.define("LLAMA_CURL", "OFF");
 
     // 允许通过环境变量配置 llama.cpp 编译的 profile， 默认是 Release，并且监听这个环境变量
     let profile =
@@ -322,11 +326,11 @@ fn main() -> anyhow::Result<()> {
         println!("cargo:rustc-link-lib=framework=Accelerate");
         println!("cargo:rustc-link-lib=c++");
 
-        if target.is_apple_darwin() {
-            if let Ok(path) = macos_link_search_path() {
-                println!("cargo:rustc-link-lib=clang_rt.osx");
-                println!("cargo:rustc-link-search={path}");
-            }
+        if target.is_apple_darwin()
+            && let Ok(path) = macos_link_search_path()
+        {
+            println!("cargo:rustc-link-lib=clang_rt.osx");
+            println!("cargo:rustc-link-search={path}");
         }
     }
 
