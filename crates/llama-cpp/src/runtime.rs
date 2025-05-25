@@ -105,7 +105,6 @@ impl Runtime {
         }
     }
 
-    /// 加载本地模型
     #[tracing::instrument(skip_all, fields(params))]
     pub fn load_model_from_file(
         &self,
