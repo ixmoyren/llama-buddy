@@ -1,0 +1,9 @@
+{
+  "scripts": {
+    "build:compress": "terser node_modules/@scalar/api-reference/dist/browser/standalone.js -o static/scalar-api-reference.js"
+  },
+  "devDependencies": {
+    "@scalar/api-reference": "^1.32.7",
+    "terser": "^5.43.1"
+  }
+}
