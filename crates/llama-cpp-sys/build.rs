@@ -1,5 +1,5 @@
 use anyhow::{Context, anyhow, bail};
-use bindgen::{RustEdition, RustTarget};
+use bindgen::RustEdition;
 use cmake::Config;
 use fs::{copy, remove_file};
 use glob::glob;
@@ -96,7 +96,6 @@ fn main() -> anyhow::Result<()> {
     let bindings = bindgen::Builder::default()
         // 指定生成 2024 版本的代码
         .rust_edition(RustEdition::Edition2024)
-        .rust_target(RustTarget::nightly())
         .header("wrapper.h")
         // 指定 Clang 搜索头文件的路径
         .clang_arg(format!("-I{}", &llama_src_dir.join("include").display()))
