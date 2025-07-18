@@ -29,6 +29,8 @@ create table if not exists model_info
     introduction text,
     pull_count   text,
     tag_count    text,
+    summary      text,
+    readme       text,
     updated_time text,
     created_at   integer default (strftime('%s', 'now')),
     updated_at   integer default (strftime('%s', 'now'))
@@ -36,13 +38,37 @@ create table if not exists model_info
 
 create unique index if not exists model_info_unique on model_info (title, href);
 
+-- 模型表
+create table if not exists model
+(
+    id         blob primary key,
+    name       text not null,
+    href       text not null,
+    path       text,
+    template   text,
+    license    text,
+    params     text,
+    size       text,
+    context    text,
+    input      text,
+    hash       text,
+    model_id   blob,
+    created_at integer default (strftime('%s', 'now')),
+    updated_at integer default (strftime('%s', 'now')),
+    foreign key (model_id) references model_info (id)
+) strict;
+
+create unique index if not exists model_unique on model (name);
+
 -- 对 title 和 introduction 创建倒排索引
 create virtual table if not exists model_info_fts using fts5
 (
     content = 'model_info',
     content_rowid = 'id',
     title,
-    introduction
+    introduction,
+    summary,
+    readme
 );
 
 create trigger if not exists model_info_before_update
@@ -63,16 +89,16 @@ create trigger if not exists model_info_after_update
     after update
     on model_info
 begin
-    insert into model_info_fts(ROWID, title, introduction)
-    values (new.ROWID, new.title, new.introduction);
+    insert into model_info_fts(ROWID, title, introduction, summary, readme)
+    values (new.ROWID, new.title, new.introduction, new.summary, new.readme);
 end;
 
 create trigger if not exists model_info_after_insert
     after insert
     on model_info
 begin
-    insert into model_info_fts(ROWID, title, introduction)
-    values (new.ROWID, new.title, new.introduction);
+    insert into model_info_fts(ROWID, title, introduction, summary, readme)
+    values (new.ROWID, new.title, new.introduction, new.summary, new.readme);
 end;
 
 -- 设置数据库的用户版本好为 1，标识数据库已经初始化
