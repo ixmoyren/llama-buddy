@@ -50,24 +50,3 @@ pub fn insert_config(conn: &Connection, name: impl ToString, value: Vec<u8>) -> 
     )?;
     Ok(())
 }
-
-// 检查是否下载好 libsimple 插件
-pub fn check_libsimple(conn: &Connection) -> anyhow::Result<bool> {
-    let libsimple_version: Vec<u8> = conn.query_row(
-        "select value from config where name = 'libsimple_version'",
-        [],
-        |r| r.get(0),
-    )?;
-    let libsimple_version = String::from_utf8(libsimple_version)?;
-    Ok(libsimple_version == "v0.5.2")
-}
-
-// 将 libsimple 的版本信息写入到数据中
-pub fn update_libsimple(conn: &Connection) -> anyhow::Result<()> {
-    let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
-    conn.execute(
-        "update config set value = cast('v0.5.2' as blob), updated_at = (?1) where name = 'libsimple_version'",
-        (&now,),
-    )?;
-    Ok(())
-}

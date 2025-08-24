@@ -15,7 +15,6 @@ create table if not exists config
 
 insert into config(name, value)
 values ('init_status', cast('Not Started' as blob)),
-       ('libsimple_version', cast('' as blob)),
        ('insert_model_info_completed', cast('Not Started' as blob))
 on conflict (name) do update set value      = excluded.value,
                                  updated_at = strftime('%s', 'now');
@@ -68,7 +67,8 @@ create virtual table if not exists model_info_fts using fts5
     title,
     introduction,
     summary,
-    readme
+    readme,
+    tokenize = 'jieba'
 );
 
 create trigger if not exists model_info_before_update

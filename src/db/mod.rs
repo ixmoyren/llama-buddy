@@ -5,6 +5,7 @@ pub(crate) use config::*;
 pub(crate) use model::*;
 
 use rusqlite::Connection;
+use sqlite_simple_tokenizer::load;
 use std::{fs::create_dir_all, path::Path, process::exit};
 
 const INIT_DB_SQL: &str = include_str!("schema.sql");
@@ -23,6 +24,8 @@ pub fn open(path: impl AsRef<Path>, db_name: impl AsRef<str>) -> anyhow::Result<
     let db_path = path.join(db_name.as_ref());
     // 数据库允许可读写，不存在则创建，允许将 path 创建为 URI，使用非 Mutex 模式
     let conn = Connection::open(db_path)?;
+    // 加载 tokenizer
+    load(&conn)?;
     check_schema(&conn)?;
     Ok(conn)
 }

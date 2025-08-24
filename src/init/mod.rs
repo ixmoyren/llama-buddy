@@ -1,16 +1,15 @@
 //! 初始化本地注册表
 
 mod model;
-mod sqlite_plugin_simple;
 
 use crate::{
     config::{Config, Data, HttpClient as HttpClientConfig, Registry},
     db,
     db::{
-        CompletedStatus, check_init_completed, check_insert_model_info_completed, check_libsimple,
-        completed_init, insert_config, insert_model_info, update_libsimple,
+        CompletedStatus, check_init_completed, check_insert_model_info_completed, completed_init,
+        insert_config, insert_model_info,
     },
-    init::{model::fetch_model_info, sqlite_plugin_simple::download_sqlite_plugin},
+    init::model::fetch_model_info,
 };
 use clap::Args;
 use std::{fs, path::PathBuf};
@@ -60,17 +59,6 @@ pub async fn init_local_registry(args: InitArgs) -> anyhow::Result<()> {
     if check_init_completed(&conn)? {
         info!("Initialization completed");
         return Ok(());
-    }
-    // 检查一下有没有从服务器上拉取 libsimple 插件
-    if !check_libsimple(&conn)? {
-        download_sqlite_plugin(
-            client.clone(),
-            back_off,
-            chunk_timeout,
-            sqlite_plugin_dir.as_path(),
-        )
-        .await?;
-        update_libsimple(&conn)?;
     }
     let mut conn = conn;
     if !check_insert_model_info_completed(&conn)? {
