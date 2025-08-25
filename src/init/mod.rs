@@ -45,14 +45,11 @@ pub async fn init_local_registry(args: InitArgs) -> anyhow::Result<()> {
     };
     let remote = new_remote.unwrap_or(remote);
     let client = client_config.build_client()?;
-    let back_off = client_config.build_back_off();
-    let chunk_timeout = client_config.build_chunk_timout();
     if force {
         fs::remove_dir_all(data_path.as_path())?
     }
     // 拉取 sqlite 的 simple 插件和词库，用于数据库检索
     let sqlite_dir = data_path.join("sqlite");
-    let sqlite_plugin_dir = sqlite_dir.join("plugin");
     // 创建数据库并且创建配置表、模型信息表
     let conn = db::open(sqlite_dir, "llama-buddy.sqlite")?;
     // 检查一下有没有完成初始化
