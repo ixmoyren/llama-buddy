@@ -62,29 +62,32 @@ mod todo {
 
     use crate::TODO_TAG;
 
-    /// In-memory todo store
+    /// 将待办事项信息保存在内存中
     type Store = Mutex<Vec<Todo>>;
 
-    /// Item to do.
+    /// 待办事项
     #[derive(Serialize, Deserialize, ToSchema, Clone)]
     struct Todo {
+        /// 唯一标识
         id: i32,
+        /// 描述
         #[schema(example = "Buy groceries")]
         value: String,
+        /// 是否完成
         done: bool,
     }
 
-    /// Todo operation errors
+    /// 错误枚举
     #[derive(Serialize, Deserialize, ToSchema)]
     enum TodoError {
-        /// Todo already exists conflict.
+        /// 待办事项已经存在，冲突
         #[schema(example = "Todo already exists")]
         Conflict(String),
-        /// Todo not found by id.
-        #[schema(example = "id = 1")]
+        /// 通过唯一标识没有找到待办事项
+        #[schema(example = "The task is not found by id = 1")]
         NotFound(String),
-        /// Todo operation unauthorized
-        #[schema(example = "missing api key")]
+        /// 未授权操作
+        #[schema(example = "Missing api key")]
         Unauthorized(String),
     }
 
@@ -97,9 +100,9 @@ mod todo {
             .with_state(store)
     }
 
-    /// List all Todo items
+    /// 获取全部的待办事项
     ///
-    /// List all Todo items from in-memory storage.
+    /// 从内存中获取全部的待办事项
     #[utoipa::path(
         get,
         path = "",
@@ -114,18 +117,18 @@ mod todo {
         Json(todos)
     }
 
-    /// Todo search query
+    /// 查询待办事项的选贤
     #[derive(Deserialize, IntoParams)]
     struct TodoSearchQuery {
-        /// Search by value. Search is incase sensitive.
+        /// 按值搜索，区分大小写
         value: String,
-        /// Search by `done` status.
+        /// 按状态搜索，是否完成
         done: bool,
     }
 
-    /// Search Todos by query params.
+    /// 通过查询选项搜索待办事项
     ///
-    /// Search `Todo`s by query params and return matching `Todo`s.
+    /// 通过查询参数搜索待办事项，并返回匹配的待办事项
     #[utoipa::path(
         get,
         path = "/search",
@@ -155,9 +158,9 @@ mod todo {
         )
     }
 
-    /// Create new Todo
+    /// 创建一个新的待办事项
     ///
-    /// Tries to create a new Todo item to in-memory storage or fails with 409 conflict if already exists.
+    /// 尝试在内存存储中创建新待办事项，如果该事项已经存在，则以409冲突失败
     #[utoipa::path(
         post,
         path = "",
@@ -193,9 +196,9 @@ mod todo {
             })
     }
 
-    /// Mark Todo item done by id
+    /// 标记待办事项已经完成
     ///
-    /// Mark Todo item done by given id. Return only status 200 on success or 404 if Todo is not found.
+    /// 通过给定 id, 标记待办事项已完成完成；如果成功，只返回状态200；如果找不到待办事项，则返回状态404
     #[utoipa::path(
         put,
         path = "/{id}",
@@ -234,9 +237,9 @@ mod todo {
             .unwrap_or(StatusCode::NOT_FOUND)
     }
 
-    /// Delete Todo item by id
+    /// 删除待办事项
     ///
-    /// Delete Todo item from in-memory storage by id. Returns either 200 success of 404 with TodoError if Todo is not found.
+    /// 按 id 从内存存储中删除待办事项。如果没有找到对应的待办，则返回 404；如果没有权限删除，则返回 401；删除成功，则返回 200
     #[utoipa::path(
         delete,
         path = "/{id}",
@@ -280,7 +283,8 @@ mod todo {
         }
     }
 
-    // normally, you should create middleware for this, but this is enough for the sake of example.
+    /// 创建一个检查 api 的中间函数
+    /// 这个作为例子足够了
     fn check_api_key(
         require_api_key: bool,
         headers: HeaderMap,
