@@ -21,7 +21,7 @@ where
     client.fetch_file(param).await
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct DownloadParam {
     // 下载路径
     pub(crate) fetch_from: Url,
@@ -32,6 +32,22 @@ pub struct DownloadParam {
     // 读写文件片允许超时时间
     pub(crate) chunk_timeout: Option<u64>,
 }
+
+impl PartialEq<Self> for DownloadParam {
+    fn eq(&self, other: &Self) -> bool {
+        let eq_chunk_timeout = match (&self.chunk_timeout, &other.chunk_timeout) {
+            (Some(a), Some(b)) => a == b,
+            (None, None) => true,
+            _ => false,
+        };
+        eq_chunk_timeout
+            && self.fetch_from == other.fetch_from
+            && self.file_name == other.file_name
+            && self.save_to == other.save_to
+    }
+}
+
+impl Eq for DownloadParam {}
 
 impl DownloadParam {
     pub fn try_new(
