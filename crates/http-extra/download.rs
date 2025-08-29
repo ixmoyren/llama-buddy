@@ -36,7 +36,7 @@ pub struct DownloadParam {
 impl PartialEq<Self> for DownloadParam {
     fn eq(&self, other: &Self) -> bool {
         let eq_chunk_timeout = match (&self.chunk_timeout, &other.chunk_timeout) {
-            (Some(a), Some(b)) => a == b,
+            (Some(left), Some(right)) => left == right,
             (None, None) => true,
             _ => false,
         };
