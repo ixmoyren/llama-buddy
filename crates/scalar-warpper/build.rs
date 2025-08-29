@@ -41,13 +41,13 @@ fn get_scalar_version_from_package_json() -> Option<String> {
     let package_json_file = File::open(package_json).unwrap();
     let reader = BufReader::new(package_json_file);
     let json = serde_json::from_reader::<_, serde_json::Value>(reader).unwrap();
-    if let Some(dev_dependencies) = json.get("dev_dependencies")
+    if let Some(dev_dependencies) = json.get("devDependencies")
         && let Some(scalar) = dev_dependencies.get("@scalar/api-reference")
         && let Some(version) = scalar.as_str()
     {
         Some(version.replace("^", ""))
     } else {
-        println!("cargo:error=Get scalar version from package.json failed.");
+        println!("cargo:error=Failed to get scalar version from package.json");
         None
     }
 }
@@ -55,13 +55,19 @@ fn get_scalar_version_from_package_json() -> Option<String> {
 fn get_scalar_version_by_pnpm() -> Option<String> {
     // 通过 pnpm 获取到 @scalar/api-reference 最新的版本
     let output = Command::new("pnpm")
-        .arg("info @scalar/api-reference version")
+        .arg("info")
+        .arg("@scalar/api-reference")
+        .arg("version")
         .output()
         .expect("Failed to execute pnpm update");
     if output.status.success() {
-        Some(String::from_utf8_lossy(&output.stdout).to_string())
+        Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
     } else {
-        println!("cargo:error={}", String::from_utf8_lossy(&output.stderr));
+        println!(
+            "cargo:error=Failed to get scalar version from npm, err is {}, {}",
+            String::from_utf8_lossy(&output.stderr),
+            &output.status
+        );
         None
     }
 }
@@ -72,26 +78,43 @@ fn install_and_compress() {
         .arg("update")
         .output()
         .expect("Failed to execute pnpm update");
-    print_output(output);
+    print_output("pnpm update", output);
     // 安装前端依赖
     let output = Command::new("pnpm")
         .arg("install")
         .output()
         .expect("Failed to execute pnpm install");
-    print_output(output);
+    print_output("pnpm install", output);
     // 压缩 scala-api-reference.js
     let output = Command::new("pnpm")
         .arg("run")
         .arg("build:compress")
         .output()
         .expect("Failed to execute pnpm run build:compress");
-    print_output(output);
+    print_output("pnpm run build:compress", output);
 }
 
-fn print_output(output: Output) {
-    if output.status.success() {
-        println!("cargo:warning={}", String::from_utf8_lossy(&output.stdout));
+fn print_output(
+    msg: &str,
+    Output {
+        status,
+        stdout,
+        stderr,
+    }: Output,
+) {
+    if status.success() {
+        let out = if stdout.is_empty() {
+            "".to_owned()
+        } else {
+            format!(", out is {}", String::from_utf8_lossy(&stdout))
+        };
+        println!("cargo:warning={msg}{out}");
     } else {
-        println!("cargo:error={}", String::from_utf8_lossy(&output.stderr));
+        let err = if stderr.is_empty() {
+            format!(", {status}")
+        } else {
+            format!(", err is {}, {status}", String::from_utf8_lossy(&stderr))
+        };
+        println!("cargo:error={msg}{err}",);
     }
 }
