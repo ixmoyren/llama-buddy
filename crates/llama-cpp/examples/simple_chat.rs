@@ -8,19 +8,19 @@ use llama_cpp::{
     sampler::Sampler,
 };
 use rustyline::{
-    completion::FilenameCompleter, error::ReadlineError, highlight::{CmdKind, Highlighter, MatchingBracketHighlighter}, hint::HistoryHinter, validate::MatchingBracketValidator, Cmd, Completer, CompletionType,
-    EditMode,
-    Helper,
-    Hinter,
-    KeyEvent,
-    Validator,
+    Cmd, Completer, CompletionType, EditMode, Helper, Hinter, KeyEvent, Validator,
+    completion::FilenameCompleter,
+    error::ReadlineError,
+    highlight::{CmdKind, Highlighter, MatchingBracketHighlighter},
+    hint::HistoryHinter,
+    validate::MatchingBracketValidator,
 };
 use std::{
     borrow::{
         Cow,
         Cow::{Borrowed, Owned},
     },
-    io::{stdout, Write},
+    io::{Write, stdout},
     path::PathBuf,
     process::exit,
 };
@@ -123,7 +123,7 @@ fn main() -> anyhow::Result<()> {
                 let message = Message::try_new("user", line)?;
                 messages.push(message);
                 let prompt = model.apply_chat_template(&template, messages.as_slice(), true)?;
-                let n_ctx_used = context.kv_self_used_cells();
+                let n_ctx_used = context.kv_cache_seq_pos_max(0) + 1;
                 let is_first = n_ctx_used == 0;
                 let tokens = vocab.tokenize(prompt, is_first, true)?;
                 let mut batch = Batch::get_one(&tokens)?;

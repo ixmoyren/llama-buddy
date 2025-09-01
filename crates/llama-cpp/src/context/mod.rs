@@ -36,6 +36,10 @@ impl Context {
         self.raw.as_ptr()
     }
 
+    pub fn memory_ptr(&self) -> llama_cpp_sys::llama_memory_t {
+        unsafe { llama_cpp_sys::llama_get_memory(self.raw.as_ptr()) }
+    }
+
     pub fn initialized_logits(&self) -> &[i32] {
         &self.initialized_logits
     }
@@ -103,10 +107,6 @@ impl Context {
     pub fn timings(&mut self) -> Perf {
         let timings = unsafe { llama_cpp_sys::llama_perf_context(self.raw.as_ptr()) };
         timings.into()
-    }
-
-    pub fn kv_self_used_cells(&self) -> i32 {
-        unsafe { llama_cpp_sys::llama_kv_self_used_cells(self.raw_mut()) }
     }
 }
 

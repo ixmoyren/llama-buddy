@@ -1,11 +1,10 @@
 use anyhow::{Context, anyhow, bail};
 use bindgen::RustEdition;
 use cmake::Config;
-use fs::{copy, remove_file};
 use glob::glob;
 use std::{
     cmp::PartialEq,
-    env, fs,
+    env,
     fs::rename,
     path::{Path, PathBuf},
     process::Command,
@@ -237,6 +236,12 @@ fn main() -> anyhow::Result<()> {
             let vulkan_lib_path = Path::new(&vulkan_path).join("Lib");
             println!("cargo:rustc-link-search={}", vulkan_lib_path.display());
             println!("cargo:rustc-link-lib=vulkan-1");
+            // 详情 https://github.com/utilityai/llama-cpp-rs/pull/767
+            unsafe {
+                env::set_var("TrackFileAccess", "false");
+            }
+            cmake_config.cflag("/FS");
+            cmake_config.cxxflag("/FS");
         } else if target.is_linux() {
             println!("cargo:rustc-link-lib=vulkan");
         }
@@ -259,17 +264,6 @@ fn main() -> anyhow::Result<()> {
     }
 
     let build_dir = cmake_config.build();
-    let build_info_src = llama_src_dir.join("common/build-info.cpp");
-    let build_info_target = build_dir.join("build-info.cpp");
-    rename(&build_info_src, &build_info_target).unwrap_or_else(|rename_error| {
-        copy(&build_info_src, &build_info_target).unwrap_or_else(|copy_error| {
-            panic!("Failed to rename {build_info_src:?} to {build_info_target:?}. Move failed with {rename_error:?} and copy failed with {copy_error:?}");
-        });
-        remove_file(&build_info_src).unwrap_or_else(|remove_error| {
-            panic!("Failed to delete {build_info_src:?} after copying to {build_info_target:?}: {remove_error:?} (move failed because {rename_error:?})");
-        });
-    });
-
     // 链接阶段，提供需要链接的 lib 目录
     println!("cargo:rustc-link-search={}", out_dir.join("lib").display());
     println!(

@@ -91,10 +91,10 @@ impl ContextParams {
         self.raw
     }
 
-    #[must_use]
-    pub fn flash_attention(&self) -> bool {
-        self.raw.flash_attn
-    }
+    // #[must_use]
+    // pub fn flash_attention(&self) -> bool {
+    //     self.raw.flash_attn
+    // }
 
     #[must_use]
     pub fn n_ctx(&self) -> Option<NonZeroU32> {
@@ -176,11 +176,11 @@ impl ContextParams {
         self
     }
 
-    #[must_use]
-    pub fn with_flash_attention(mut self, enabled: bool) -> Self {
-        self.raw.flash_attn = enabled;
-        self
-    }
+    // #[must_use]
+    // pub fn with_flash_attention(mut self, enabled: bool) -> Self {
+    //     self.raw.flash_attn = enabled;
+    //     self
+    // }
 
     #[must_use]
     pub fn with_offload_kqv(mut self, enabled: bool) -> Self {

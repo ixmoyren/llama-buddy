@@ -15,6 +15,7 @@ impl Perf {
         t_eval_ms: f64,
         n_p_eval: i32,
         n_eval: i32,
+        n_reused: i32,
     ) -> Self {
         Self {
             raw: llama_cpp_sys::llama_perf_context_data {
@@ -24,6 +25,7 @@ impl Perf {
                 t_eval_ms,
                 n_p_eval,
                 n_eval,
+                n_reused,
             },
         }
     }
@@ -80,6 +82,10 @@ impl Perf {
 
     pub fn with_n_eval(&mut self, n_eval: i32) {
         self.raw.n_eval = n_eval;
+    }
+
+    pub fn with_n_reused(&mut self, n_reused: i32) {
+        self.raw.n_reused = n_reused;
     }
 }
 
