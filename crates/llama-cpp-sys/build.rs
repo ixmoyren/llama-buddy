@@ -1,5 +1,5 @@
 use anyhow::{Context, anyhow, bail};
-use bindgen::RustEdition;
+use bindgen::{Bindings, RustEdition};
 use cmake::Config;
 use glob::glob;
 use std::{
@@ -62,123 +62,25 @@ fn main() -> anyhow::Result<()> {
     let llama_src_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?).join("llama.cpp");
 
     // 监听可能变化的文件，当文件变化则重新构建
-    println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed=wrapper.h");
-    // 不监听一整个 llama.cpp 文件夹，这样会触发一些不必要的构建
-    let entry_iter = walkdir::WalkDir::new(&llama_src_dir)
-        .into_iter()
-        .filter_entry(|e| {
-            // 只需要非隐藏文件
-            !e.file_name()
-                .to_str()
-                .map(|s| s.starts_with('.'))
-                .unwrap_or_default()
-        });
-    for entry in entry_iter {
-        let entry = entry.context("Failed to obtain file entry!")?;
-        // 文件名中是否包含 CMakeLists.txt
-        let contain_cmake = entry
-            .file_name()
-            .to_str()
-            .is_some_and(|f| f.starts_with("CMakeLists.txt"));
-        // 在 common 或者 ggml/src 或者 src 下
-        let interest = entry.path().starts_with("common")
-            | entry.path().starts_with("ggml/src")
-            | entry.path().starts_with("src");
-        let rebuild = contain_cmake | interest;
-        if rebuild {
-            println!("cargo:rerun-if-changed={}", entry.path().display());
-        }
-    }
+    cargo_rerun_if_file_changed(&llama_src_dir)?;
 
     // bindgen 配置
-    let bindings = bindgen::Builder::default()
-        // 指定生成 2024 版本的代码
-        .rust_edition(RustEdition::Edition2024)
-        .header("wrapper.h")
-        // 指定 Clang 搜索头文件的路径
-        .clang_arg(format!("-I{}", &llama_src_dir.join("include").display()))
-        .clang_arg(format!(
-            "-I{}",
-            &llama_src_dir.join("ggml/include").display()
-        ))
-        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
-        // 设置生成的代码中派生 PartialEq，即生成的 struct 上面有 #[derive(PartialEq)] 注解
-        .derive_partialeq(true)
-        .allowlist_function("ggml_.*")
-        .allowlist_type("ggml_.*")
-        .allowlist_function("llama_.*")
-        .allowlist_type("llama_.*")
-        // 不把 enum 附加到常量和 newType 变体
-        .prepend_enum_name(false)
-        .generate()
-        .context("Failed to generate bindings")?;
+    let bindings = make_bindgen(&llama_src_dir)?;
+    // 指定生成的代码写入的文件，显式指定这个路径，目的为了 IDE 或者 LSP 可以分析到这个文件，进而提供更好的提示和代码完成
     bindings
-        // 指定生成的代码写入的文件，显式指定这个路径，目的为了 IDE 或者 LSP 可以分析到这个文件，进而提供更好的提示和代码完成
         .write_to_file(binding_rs_out_dir.join("bindings.rs"))
         .context("Failed to write bindings")?;
-
-    // Cmake 配置，详情可以通过 llama.cpp 的 CMakeLists.txt 中了解
-    let mut cmake_config = Config::new(&llama_src_dir);
-
-    // 允许通过环境变量设置 CMake 在构建项目时的并行级别
-    let parallel_level = env::var("BUILD_PARALLEL_LEVEL")
-        .map_or(
-            std::thread::available_parallelism()
-                .context("Failed to obtain an estimate of the default amount of parallelism a program should use!")?
-                .get(), |v| v.parse::<usize>().expect("Please provide a number!"),
-        );
-    unsafe {
-        env::set_var("CMAKE_BUILD_PARALLEL_LEVEL", parallel_level.to_string());
-    }
-
-    // 编译期不开启测试
-    cmake_config.define("LLAMA_BUILD_TESTS", "OFF");
-    // 编译期不运行样例
-    cmake_config.define("LLAMA_BUILD_EXAMPLES", "OFF");
-    // 不编译 SERVER 组件
-    cmake_config.define("LLAMA_BUILD_SERVER", "OFF");
-    // 编译 LLaMA 模型时不生成共享库
-    cmake_config.define("BUILD_SHARED_LIBS", "OFF");
-    // 不编译 TOOL 组件
-    cmake_config.define("LLAMA_BUILD_TOOLS", "OFF");
-    // 不编译 LLAMA_CURL 组件
-    cmake_config.define("LLAMA_CURL", "OFF");
-
-    // 允许通过环境变量配置 llama.cpp 编译的 profile， 默认是 Release，并且监听这个环境变量
-    let profile =
-        env::var("LLAMA_CMAKE_BUILD_TYPE").map_or(CMakeBuildType::default(), String::into);
-    println!("cargo:rerun-if-env-changed=LLAMA_CMAKE_BUILD_TYPE");
-    cmake_config.profile(profile.as_str());
-
-    // 允许通过环境变量配置 CMake 是否输出详细信息
-    let verbose = env::var("CMAKE_VERBOSE").is_ok();
-    cmake_config.very_verbose(verbose);
-
-    // 允许通过环境变量配置 llama.cpp 模型在编译时是否使用静态运行时库（CRT），这个环境变量为布尔值 true 和 false，并且监听这个环境变量
-    let static_crt = env::var("LLAMA_STATIC_CRT")
-        .map(|v| v == "true")
-        .unwrap_or(false);
-    println!("cargo:rerun-if-env-changed=LLAMA_STATIC_CRT");
-    // 设置是否静态运行时库
-    cmake_config.static_crt(static_crt);
 
     // 获取目标三元组，针对不同的操作系统做不同的配置
     let target = TargetTriple::parse_from_env()?;
     println!("cargo:warning={target:?}");
 
+    // Cmake 配置，详情可以通过 llama.cpp 的 CMakeLists.txt 中了解
+    let mut cmake_config = make_cmake_config(&llama_src_dir, &target)?;
+
     // 如果是苹果的系统，那么不编译 GGML_BLAS
     if target.is_apple() {
         cmake_config.define("GGML_BLAS", "OFF");
-    }
-
-    // 如果是 Windows 系统 msvc 工具链，并且 CMake 的 profile 不是 Debug，手动添加优化标识
-    // 详细情况可看 https://github.com/rust-lang/cmake-rs/issues/240
-    if target.is_windows_msvc() && profile != CMakeBuildType::Debug {
-        for flag in &["/O2", "/DNDEBUG", "/Ob2"] {
-            cmake_config.cflag(flag);
-            cmake_config.cxxflag(flag);
-        }
     }
 
     // 安卓系统配置
@@ -295,14 +197,8 @@ fn main() -> anyhow::Result<()> {
         println!("cargo:rustc-link-lib=static=culibos");
     }
 
-    let llama_libs_kind = "static";
-    let llama_libs = extract_lib_names(&out_dir, &target)?;
-    assert_ne!(llama_libs.len(), 0);
-
-    for lib in llama_libs {
-        // 静态链接到这些编译后的库产物中
-        println!("cargo:rustc-link-lib={llama_libs_kind}={lib}",);
-    }
+    // 静态链接到 LLAMA.CPP 编译后的产物中
+    cargo_rustc_link_llama_cpp_lib(&out_dir, &target)?;
 
     // OpenMP
     if cfg!(feature = "openmp") && target.is_gnu() {
@@ -330,35 +226,211 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// 设置 rustc 链接到 LLAMA.CPP 的编译产物
+fn cargo_rustc_link_llama_cpp_lib(out: &Path, target: &TargetTriple) -> anyhow::Result<()> {
+    let llama_libs_kind = "static";
+    let llama_libs = extract_lib_names(out, target)?;
+    assert_ne!(llama_libs.len(), 0);
+
+    for lib in llama_libs {
+        // 静态链接到这些编译后的库产物中
+        println!("cargo:rustc-link-lib={llama_libs_kind}={lib}",);
+    }
+
+    Ok(())
+}
+
+/// 调整 lib 的名称
 fn extract_lib_names(out_dir: &Path, target: &TargetTriple) -> anyhow::Result<Vec<String>> {
     let lib_pattern = if target.is_windows() { "*.lib" } else { "*.a" };
     let libs_dir = out_dir.join("lib*");
     let pattern = libs_dir.join(lib_pattern);
     println!("cargo:warning=Extract libs {}", pattern.display());
 
+    let Some(pattern) = pattern.to_str() else {
+        bail!("Failed to get lib pattern str")
+    };
+
     let mut lib_names: Vec<String> = Vec::new();
+    // 文件的后缀名为 a
+    let path_extension_a = std::ffi::OsStr::new("a");
     // 通过指定的 pattern 找到所有编译生成的库产物
-    for entry in glob(pattern.to_str().unwrap())? {
+    for entry in glob(pattern)? {
         match entry {
             Ok(path) => {
-                let stem = path.file_stem().unwrap();
-                let stem_str = stem.to_str().unwrap();
-                // 移除 lib 前缀
-                let lib_name = if stem_str.starts_with("lib") {
-                    stem_str.strip_prefix("lib").unwrap_or(stem_str)
+                if let Some(stem) = path.file_stem()
+                    && let Some(stem_str) = stem.to_str()
+                {
+                    // 移除 lib 前缀
+                    let lib_name = if stem_str.starts_with("lib") {
+                        stem_str.strip_prefix("lib").unwrap_or(stem_str)
+                    } else {
+                        let Some(extension) = path.extension() else {
+                            bail!("Failed to get lib file path extension, {path:?}")
+                        };
+                        if extension == path_extension_a
+                            && let Some(parent) = path.parent()
+                        {
+                            let target = parent.join(format!("lib{stem_str}.a"));
+                            rename(&path, &target).context("Failed to rename lib")?;
+                        }
+                        stem_str
+                    };
+                    lib_names.push(lib_name.to_string());
                 } else {
-                    if path.extension() == Some(std::ffi::OsStr::new("a")) {
-                        let target = path.parent().unwrap().join(format!("lib{stem_str}.a"));
-                        rename(&path, &target).context("Failed to rename lib")?;
-                    }
-                    stem_str
-                };
-                lib_names.push(lib_name.to_string());
+                    bail!("Failed to get lib file stem str, {path:?}")
+                }
             }
-            Err(e) => return Err(anyhow!("Match failure, error was {e:?}")),
+            Err(e) => bail!("Match failure, error was {e:?}"),
         }
     }
     Ok(lib_names)
+}
+
+/// 构建 cmake 的配置
+///
+/// 允许通过环境变量设置 CMake 构建项目时的并行级别
+///
+/// 不编译 LLAMA.CPP 的测试库
+///
+/// 不编译 LLAMA.CPP 的示例库
+///
+/// 不编译 LLAMA.CPP 的 SERVER 模块
+///
+/// 不编译 LLAMA.CPP 的 TOOL 模块
+///
+/// 不编译 LLAMA.CPP 的 CURL 模块
+///
+/// 不生成静态共享库
+///
+/// 允许通过环境变量配置 LLAMA.CPP 编译的 profile，默认是 Release
+///
+/// 允许通过环境变量配置 CMake 是否输出详细信息，默认不输出详细信息
+///
+/// 允许通过环境变量配置 LLAMA.CPP 在编译时是否使用静态运行时库，默认不使用
+///
+/// 如果编译工具是 Windows 系统 msvc ，并且 CMake 的 profile 不是 Debug，手动添加优化标识
+fn make_cmake_config(llama_src: &Path, target: &TargetTriple) -> anyhow::Result<Config> {
+    let mut cmake_config = Config::new(llama_src);
+
+    // 允许通过环境变量设置 CMake 在构建项目时的并行级别
+    let parallel_level = env::var("BUILD_PARALLEL_LEVEL")
+        .map_or(
+            std::thread::available_parallelism()
+                .context("Failed to obtain an estimate of the default amount of parallelism a program should use!")?
+                .get(), |v| v.parse::<usize>().expect("Please provide a number!"),
+        );
+    unsafe {
+        env::set_var("CMAKE_BUILD_PARALLEL_LEVEL", parallel_level.to_string());
+    }
+
+    // 编译期不开启测试
+    cmake_config.define("LLAMA_BUILD_TESTS", "OFF");
+    // 编译期不运行样例
+    cmake_config.define("LLAMA_BUILD_EXAMPLES", "OFF");
+    // 不编译 SERVER 组件
+    cmake_config.define("LLAMA_BUILD_SERVER", "OFF");
+    // 不编译 TOOL 组件
+    cmake_config.define("LLAMA_BUILD_TOOLS", "OFF");
+    // 不编译 CURL 组件
+    cmake_config.define("LLAMA_CURL", "OFF");
+
+    // 不生成共享库
+    cmake_config.define("BUILD_SHARED_LIBS", "OFF");
+
+    // 允许通过环境变量配置 llama.cpp 编译的 profile， 默认是 Release，并且监听这个环境变量
+    let profile =
+        env::var("LLAMA_CMAKE_BUILD_TYPE").map_or(CMakeBuildType::default(), String::into);
+    println!("cargo:rerun-if-env-changed=LLAMA_CMAKE_BUILD_TYPE");
+    cmake_config.profile(profile.as_str());
+
+    // 允许通过环境变量配置 CMake 是否输出详细信息
+    let verbose = env::var("CMAKE_VERBOSE").is_ok();
+    cmake_config.very_verbose(verbose);
+
+    // 允许通过环境变量配置 llama.cpp 在编译时是否使用静态运行时库（CRT），这个环境变量为布尔值 true 和 false，并且监听这个环境变量
+    let static_crt = env::var("LLAMA_STATIC_CRT")
+        .map(|v| v == "true")
+        .unwrap_or(false);
+    println!("cargo:rerun-if-env-changed=LLAMA_STATIC_CRT");
+    // 设置是否静态运行时库
+    cmake_config.static_crt(static_crt);
+
+    // 如果是 Windows 系统 msvc 工具链，并且 CMake 的 profile 不是 Debug，手动添加优化标识
+    // 详细情况可看 https://github.com/rust-lang/cmake-rs/issues/240
+    if target.is_windows_msvc() && profile != CMakeBuildType::Debug {
+        for flag in &["/O2", "/DNDEBUG", "/Ob2"] {
+            cmake_config.cflag(flag);
+            cmake_config.cxxflag(flag);
+        }
+    }
+
+    Ok(cmake_config)
+}
+
+/// 构建 Binding
+///
+/// 指定 bindgen 相关配置，生成符合 2024 版本的代码
+///
+/// 指定头文件的包装文件
+///
+/// 指定生成的代码中的结构体派生 PartialEq
+///
+/// 指定需要关注的函数和类型
+fn make_bindgen(llama_src: &Path) -> anyhow::Result<Bindings> {
+    let bindings = bindgen::Builder::default()
+        // 指定生成 2024 版本的代码
+        .rust_edition(RustEdition::Edition2024)
+        .header("wrapper.h")
+        // 指定 Clang 搜索头文件的路径
+        .clang_arg(format!("-I{}", llama_src.join("include").display()))
+        .clang_arg(format!("-I{}", llama_src.join("ggml/include").display()))
+        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
+        // 设置生成的代码中派生 PartialEq，即生成的 struct 上面有 #[derive(PartialEq)] 注解
+        .derive_partialeq(true)
+        .allowlist_function("ggml_.*")
+        .allowlist_type("ggml_.*")
+        .allowlist_function("llama_.*")
+        .allowlist_type("llama_.*")
+        // 不把 enum 附加到常量和 newType 变体
+        .prepend_enum_name(false)
+        .generate()
+        .context("Failed to generate bindings")?;
+    Ok(bindings)
+}
+
+/// 监听文件，如果有变化，则重新运行 cargo
+fn cargo_rerun_if_file_changed(llama_src: &Path) -> anyhow::Result<()> {
+    println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=wrapper.h");
+    // 不监听一整个 llama.cpp 文件夹，这样会触发一些不必要的构建
+    let entry_iter = walkdir::WalkDir::new(llama_src)
+        .into_iter()
+        .filter_entry(|e| {
+            // 只需要非隐藏文件
+            !e.file_name()
+                .to_str()
+                .map(|s| s.starts_with('.'))
+                .unwrap_or_default()
+        });
+    for entry in entry_iter {
+        let entry = entry.context("Failed to obtain file entry!")?;
+        // 判断当前文件的名称是否包含 CMakeLists.txt，包含则需要监听
+        let contain_cmake = entry
+            .file_name()
+            .to_str()
+            .is_some_and(|f| f.starts_with("CMakeLists.txt"));
+        // 判断当前文件是否在 common 或者 ggml/src 或者 src 下，是则需要监听
+        let interest = entry.path().starts_with("common")
+            | entry.path().starts_with("ggml/src")
+            | entry.path().starts_with("src");
+        let rebuild = contain_cmake | interest;
+        if rebuild {
+            println!("cargo:rerun-if-changed={}", entry.path().display());
+        }
+    }
+
+    Ok(())
 }
 
 fn macos_link_search_path() -> anyhow::Result<String> {
