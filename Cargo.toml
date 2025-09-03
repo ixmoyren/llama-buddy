@@ -11,15 +11,17 @@ license = "MIT OR Apache-2.0"
 anyhow = "1"
 clap = { version = "4.5", features = ["derive", "wrap_help"] }
 llama-buddy-macro = { path = "crates/llama-buddy-macro" }
-sys-extra = { path = "crates/sys-extra", default-features = false }
 http-extra = { path = "crates/http-extra" }
 reqwest = { version = "0.12", default-features = false, features = ["http2", "macos-system-configuration", "charset", "cookies", "socks", "hickory-dns", "rustls-tls"] }
 rusqlite = { version = "0.37.0", default-features = true, features = ["bundled"] }
 rustyline = { git = "https://github.com/kkawakam/rustyline.git", default-features = true, features = ["derive"] }
+sys-extra = { path = "crates/sys-extra", default-features = false }
+serde = { version = "1.0.219", default-features = false }
+serde_json = { version = "1.0.143", default-features = false }
 thiserror = "2"
 tempfile = "3.21.0"
 tracing = "0.1.41"
-tracing-subscriber = "0.3.19"
+tracing-subscriber = "0.3.20"
 tokio = "1"
 
 [package]
@@ -36,8 +38,8 @@ reqwest = { workspace = true }
 rusqlite = { workspace = true, features = ["chrono", "uuid"] }
 sqlite-simple-tokenizer = "0.3.0"
 scraper = "0.24.0"
-serde = { version = "1.0.219", features = ["derive"] }
-serde_json = { version = "1.0.143", features = ["std"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
 sys-extra = { workspace = true, features = ["dir", "target"] }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
@@ -46,4 +48,4 @@ toml_edit = { version = "0.23.4", features = ["serde"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 url = { version = "2.5.7", default-features = false, features = ["serde"] }
-uuid = { version = "1.18.0", features = ["v7"] }
+uuid = { version = "1.18.1", features = ["v7"] }
