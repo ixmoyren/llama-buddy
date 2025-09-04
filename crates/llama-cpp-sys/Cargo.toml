@@ -14,13 +14,13 @@ path = "lib.rs"
 anyhow = { workspace = true }
 bindgen = "0.72.0"
 cmake = "0.1.54"
-find_cuda_helper = "0.2.0"
+find_cuda_helper = { version = "0.2.0", optional = true }
 glob = "0.3.3"
 sys-extra = { workspace = true, features = ["target"] }
 walkdir = "2.5.0"
 
 [features]
-cuda = []
+cuda = ["dep:find_cuda_helper"]
 cuda-no-vmm = ["cuda"]
 vulkan = []
 openmp = []

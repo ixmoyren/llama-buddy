@@ -128,86 +128,66 @@ fn main() -> anyhow::Result<()> {
 
     // 针对 feature 进行配置
     // 开启 vulkan，需要开启 cmake 的 vulkan 功能标志，并提供 vulkan 的 lib，供 rustc 链接
-    if cfg!(feature = "vulkan") {
-        cmake_config.define("GGML_VULKAN", "ON");
-        if target.is_windows() {
-            // 需要手动提供 vulkan 安装的目录
-            let vulkan_path = env::var("VULKAN_SDK").context(
-                "Please install Vulkan SDK and ensure that VULKAN_SDK env variable is set",
-            )?;
-            let vulkan_lib_path = Path::new(&vulkan_path).join("Lib");
-            println!("cargo:rustc-link-search={}", vulkan_lib_path.display());
-            println!("cargo:rustc-link-lib=vulkan-1");
-            // 详情 https://github.com/utilityai/llama-cpp-rs/pull/767
-            unsafe {
-                env::set_var("TrackFileAccess", "false");
-            }
-            cmake_config.cflag("/FS");
-            cmake_config.cxxflag("/FS");
-        } else if target.is_linux() {
-            println!("cargo:rustc-link-lib=vulkan");
-        }
-    }
+    #[cfg(feature = "vulkan")]
+    open_vulkan_backend(&mut cmake_config, &target)?;
 
     // 开启 cuda 功能则需要开启 cmake 的 cuda 功能标志
-    if cfg!(feature = "cuda") {
-        cmake_config.define("GGML_CUDA", "ON");
-        if cfg!(feature = "cuda-no-vmm") {
-            cmake_config.define("GGML_CUDA_NO_VMM", "ON");
-        }
-    }
+    #[cfg(any(feature = "cuda", feature = "cuda-no-vmm"))]
+    open_cuda_backend(&mut cmake_config)?;
 
     // 开启 openmp 功能（OpenMP主要用于多线程并行计算）
     // openmp 在安卓上性能提升不明显，安卓平台优先使用 vulkan 编译
-    if cfg!(feature = "openmp") && !target.is_android() {
-        cmake_config.define("GGML_OPENMP", "ON");
-    } else {
-        cmake_config.define("GGML_OPENMP", "OFF");
-    }
+    #[cfg(feature = "openmp")]
+    open_openmp_backend(&mut cmake_config, &target)?;
 
     let build_dir = cmake_config.build();
     // 链接阶段，提供需要链接的 lib 目录
-    println!("cargo:rustc-link-search={}", out_dir.join("lib").display());
-    println!(
-        "cargo:rustc-link-search={}",
-        out_dir.join("lib64").display()
-    );
-    println!("cargo:rustc-link-search={}", build_dir.display());
-
-    if cfg!(feature = "cuda") {
-        // 寻找 cuda 安装的路径
-        for lib_dir in find_cuda_helper::find_cuda_lib_dirs() {
-            println!("cargo:rustc-link-search=native={}", lib_dir.display());
-        }
-
-        println!("cargo:rustc-link-lib=static=cudart_static");
-
-        if target.is_windows() {
-            println!("cargo:rustc-link-lib=static=cublas");
-            println!("cargo:rustc-link-lib=static=cublasLt");
-        } else {
-            println!("cargo:rustc-link-lib=static=cublas_static");
-            println!("cargo:rustc-link-lib=static=cublasLt_static");
-        }
-
-        if !cfg!(feature = "cuda-no-vmm") {
-            println!("cargo:rustc-link-lib=cuda");
-        }
-
-        println!("cargo:rustc-link-lib=static=culibos");
-    }
-
-    // 链接 LLAMA.CPP 编译后的产物中
-    cargo_rustc_link_llama_cpp_lib(&out_dir, &target)?;
-
-    // OpenMP
-    if cfg!(feature = "openmp") && target.is_gnu() {
-        println!("cargo:rustc-link-lib=gomp");
-    }
+    cargo_rustc_link_llama_cpp_lib(&out_dir, &build_dir, &target)?;
 
     // 链接 CPP 标准库
     cargo_rustc_link_cpp_lib(&target)?;
 
+    #[cfg(any(feature = "cuda", feature = "cuda-no-vmm"))]
+    cargo_rustc_link_cuda_lib(&target)?;
+
+    #[cfg(feature = "openmp")]
+    cargo_rustc_link_openmp_lib(&target)?;
+
+    Ok(())
+}
+
+/// 设置 rustc 链接到 openmp 的动态库
+#[cfg(feature = "openmp")]
+fn cargo_rustc_link_openmp_lib(target: &TargetTriple) -> anyhow::Result<()> {
+    if target.is_gnu() {
+        println!("cargo:rustc-link-lib=gomp");
+    }
+    Ok(())
+}
+
+/// 设置 rustc 链接到 CUDA 的动态库
+#[cfg(any(feature = "cuda", feature = "cuda-no-vmm"))]
+fn cargo_rustc_link_cuda_lib(target: &TargetTriple) -> anyhow::Result<()> {
+    // 寻找 cuda 安装的路径
+    for lib_dir in find_cuda_helper::find_cuda_lib_dirs() {
+        println!("cargo:rustc-link-search=native={}", lib_dir.display());
+    }
+
+    println!("cargo:rustc-link-lib=static=cudart_static");
+
+    if target.is_windows() {
+        println!("cargo:rustc-link-lib=static=cublas");
+        println!("cargo:rustc-link-lib=static=cublasLt");
+    } else {
+        println!("cargo:rustc-link-lib=static=cublas_static");
+        println!("cargo:rustc-link-lib=static=cublasLt_static");
+    }
+
+    if !cfg!(feature = "cuda-no-vmm") {
+        println!("cargo:rustc-link-lib=cuda");
+    }
+
+    println!("cargo:rustc-link-lib=static=culibos");
     Ok(())
 }
 
@@ -251,7 +231,14 @@ fn macos_link_search_path() -> anyhow::Result<String> {
 }
 
 /// 设置 rustc 链接到 LLAMA.CPP 的编译产物
-fn cargo_rustc_link_llama_cpp_lib(out: &Path, target: &TargetTriple) -> anyhow::Result<()> {
+fn cargo_rustc_link_llama_cpp_lib(
+    out: &Path,
+    build: &Path,
+    target: &TargetTriple,
+) -> anyhow::Result<()> {
+    println!("cargo:rustc-link-search={}", out.join("lib").display());
+    println!("cargo:rustc-link-search={}", out.join("lib64").display());
+    println!("cargo:rustc-link-search={}", build.display());
     let llama_libs_kind = "static";
     let llama_libs = extract_lib_names(out, target)?;
     assert_ne!(llama_libs.len(), 0);
@@ -309,6 +296,51 @@ fn extract_lib_names(out_dir: &Path, target: &TargetTriple) -> anyhow::Result<Ve
         }
     }
     Ok(lib_names)
+}
+
+/// 针对 openmp 进行配置
+#[cfg(feature = "openmp")]
+fn open_openmp_backend(cmake_config: &mut Config, target: &TargetTriple) -> anyhow::Result<()> {
+    // openmp 在安卓上性能提升不明显，安卓平台优先使用 vulkan 编译
+    if !target.is_android() {
+        cmake_config.define("GGML_OPENMP", "ON");
+    } else {
+        cmake_config.define("GGML_OPENMP", "OFF");
+    }
+    Ok(())
+}
+
+/// 针对 CUDA 进行配置
+#[cfg(any(feature = "cuda", feature = "cuda-no-vmm"))]
+fn open_cuda_backend(cmake_config: &mut Config) -> anyhow::Result<()> {
+    cmake_config.define("GGML_CUDA", "ON");
+    if cfg!(feature = "cuda-no-vmm") {
+        cmake_config.define("GGML_CUDA_NO_VMM", "ON");
+    }
+    Ok(())
+}
+
+/// 针对 vulkan 进行配置
+#[cfg(feature = "vulkan")]
+fn open_vulkan_backend(cmake_config: &mut Config, target: &TargetTriple) -> anyhow::Result<()> {
+    cmake_config.define("GGML_VULKAN", "ON");
+    if target.is_windows() {
+        // 需要手动提供 vulkan 安装的目录
+        let vulkan_path = env::var("VULKAN_SDK")
+            .context("Please install Vulkan SDK and ensure that VULKAN_SDK env variable is set")?;
+        let vulkan_lib_path = Path::new(&vulkan_path).join("Lib");
+        println!("cargo:rustc-link-search={}", vulkan_lib_path.display());
+        println!("cargo:rustc-link-lib=vulkan-1");
+        // 详情 https://github.com/utilityai/llama-cpp-rs/pull/767
+        unsafe {
+            env::set_var("TrackFileAccess", "false");
+        }
+        cmake_config.cflag("/FS");
+        cmake_config.cxxflag("/FS");
+    } else if target.is_linux() {
+        println!("cargo:rustc-link-lib=vulkan");
+    }
+    Ok(())
 }
 
 /// 构建 cmake 的配置

@@ -12,12 +12,21 @@ path = "src/lib.rs"
 
 [dependencies]
 enumflags2 = "0.7"
-llama-cpp-sys = { path = "../llama-cpp-sys" }
+llama-cpp-sys = { path = "../llama-cpp-sys", optional = true }
 tracing = { workspace = true }
 thiserror = { workspace = true }
+
+[features]
+default = ["openmp"]
+cuda = ["llama-cpp-sys/cuda"]
+cuda-no-vmm = ["cuda", "llama-cpp-sys/cuda-no-vmm"]
+vulkan = ["llama-cpp-sys/vulkan"]
+openmp = ["llama-cpp-sys/openmp"]
+# Only has an impact on Android.
+android-shared-stdcxx = ["llama-cpp-sys/android-shared-stdcxx"]
 
 [dev-dependencies]
 anyhow = { workspace = true }
 clap = { workspace = true }
-llama-cpp = { path = "." }
+llama-cpp = { path = ".", features = ["cuda"], default-features = false }
 rustyline = { workspace = true }
