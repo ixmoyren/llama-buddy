@@ -1,7 +1,7 @@
 use super::Token;
 
 /// `llama_logit_bias` 包装器
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug)]
 #[repr(transparent)]
 pub struct LogitBias {
     raw: llama_cpp_sys::llama_logit_bias,

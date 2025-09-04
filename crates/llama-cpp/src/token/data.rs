@@ -3,7 +3,7 @@ use crate::sampler::Sampler;
 use std::ptr;
 
 /// `llama_token_data` 的包装
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug)]
 #[repr(transparent)]
 pub struct TokenData {
     raw: llama_cpp_sys::llama_token_data,
@@ -46,7 +46,7 @@ impl TokenData {
 }
 
 /// `llama_token_data_array` 的包装
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct TokenDataVec {
     raw: Vec<TokenData>,
     selected: Option<usize>,

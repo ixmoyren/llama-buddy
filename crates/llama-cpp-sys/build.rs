@@ -1,4 +1,4 @@
-use anyhow::{Context, anyhow, bail};
+use anyhow::{Context, bail};
 use bindgen::{Bindings, RustEdition};
 use cmake::Config;
 use glob::glob;
@@ -116,7 +116,7 @@ fn main() -> anyhow::Result<()> {
             bail!("Unsupported Android target {target:?}")
         }
 
-        // 不将  LLaMA 模型打包成一个单一文件
+        // 不将 LLAMA.CPP 打包成一个单一文件
         cmake_config.define("GGML_LLAMAFILE", "OFF");
 
         // 开启 android 系统下共享 stdcxx 库
@@ -197,7 +197,7 @@ fn main() -> anyhow::Result<()> {
         println!("cargo:rustc-link-lib=static=culibos");
     }
 
-    // 静态链接到 LLAMA.CPP 编译后的产物中
+    // 链接 LLAMA.CPP 编译后的产物中
     cargo_rustc_link_llama_cpp_lib(&out_dir, &target)?;
 
     // OpenMP
@@ -205,6 +205,14 @@ fn main() -> anyhow::Result<()> {
         println!("cargo:rustc-link-lib=gomp");
     }
 
+    // 链接 CPP 标准库
+    cargo_rustc_link_cpp_lib(&target)?;
+
+    Ok(())
+}
+
+/// 设置 rustc 链接 C++ 标准库
+fn cargo_rustc_link_cpp_lib(target: &TargetTriple) -> anyhow::Result<()> {
     // 链接 c++ runtime
     if target.is_linux() {
         println!("cargo:rustc-link-lib=dylib=stdc++");
@@ -215,15 +223,31 @@ fn main() -> anyhow::Result<()> {
         println!("cargo:rustc-link-lib=framework=Accelerate");
         println!("cargo:rustc-link-lib=c++");
 
-        if target.is_apple_darwin()
-            && let Ok(path) = macos_link_search_path()
-        {
+        if target.is_apple_darwin() {
+            let path = macos_link_search_path()?;
             println!("cargo:rustc-link-lib=clang_rt.osx");
             println!("cargo:rustc-link-search={path}");
         }
     }
 
     Ok(())
+}
+
+fn macos_link_search_path() -> anyhow::Result<String> {
+    let output = Command::new("clang").arg("--print-search-dirs").output()?;
+    if !output.status.success() {
+        bail!("failed to run 'clang --print-search-dirs', continuing without a link search path")
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    for line in stdout.lines() {
+        if line.contains("libraries: =") {
+            let path = line.split('=').nth(1).unwrap();
+            return Ok(format!("{path}/lib/darwin"));
+        }
+    }
+
+    bail!("failed to determine the link search path, continuing without it")
 }
 
 /// 设置 rustc 链接到 LLAMA.CPP 的编译产物
@@ -386,8 +410,7 @@ fn make_bindgen(llama_src: &Path) -> anyhow::Result<Bindings> {
         .clang_arg(format!("-I{}", llama_src.join("include").display()))
         .clang_arg(format!("-I{}", llama_src.join("ggml/include").display()))
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
-        // 设置生成的代码中派生 PartialEq，即生成的 struct 上面有 #[derive(PartialEq)] 注解
-        .derive_partialeq(true)
+        .use_core()
         .allowlist_function("ggml_.*")
         .allowlist_type("ggml_.*")
         .allowlist_function("llama_.*")
@@ -431,25 +454,4 @@ fn cargo_rerun_if_file_changed(llama_src: &Path) -> anyhow::Result<()> {
     }
 
     Ok(())
-}
-
-fn macos_link_search_path() -> anyhow::Result<String> {
-    let output = Command::new("clang").arg("--print-search-dirs").output()?;
-    if !output.status.success() {
-        return Err(anyhow!(
-            "failed to run 'clang --print-search-dirs', continuing without a link search path"
-        ));
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    for line in stdout.lines() {
-        if line.contains("libraries: =") {
-            let path = line.split('=').nth(1).unwrap();
-            return Ok(format!("{path}/lib/darwin"));
-        }
-    }
-
-    Err(anyhow!(
-        "failed to determine the link search path, continuing without it"
-    ))
 }
