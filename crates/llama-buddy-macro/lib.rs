@@ -2,6 +2,7 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{Data, DeriveInput, Fields, parse_macro_input};
 
+/// 这是一个用来获取结构体、枚举、联合体中定义的字段的顺序的派生宏
 #[proc_macro_derive(IndexByField)]
 pub fn derive_index_by_field(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
