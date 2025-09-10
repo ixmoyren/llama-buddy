@@ -9,8 +9,8 @@ pub struct Batch {
 }
 
 impl Batch {
-    pub fn logits(&self) -> &Vec<i32> {
-        self.initialized_logits.as_ref()
+    pub fn logits(&self) -> &[i32] {
+        self.initialized_logits.as_slice()
     }
 
     pub fn raw(&self) -> llama_cpp_sys::llama_batch {
@@ -25,7 +25,7 @@ impl Batch {
     pub fn add(
         &mut self,
         token: Token,
-        pos: llama_cpp_sys::llama_pos,
+        pos: i32,
         seq_ids: &[i32],
         logits: bool,
     ) -> Result<(), BatchAddError> {

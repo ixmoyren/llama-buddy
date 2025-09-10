@@ -41,7 +41,7 @@ impl Context {
     }
 
     pub fn initialized_logits(&self) -> &[i32] {
-        &self.initialized_logits
+        self.initialized_logits.as_slice()
     }
 
     pub fn embeddings_enabled(&self) -> bool {
@@ -79,10 +79,10 @@ impl Context {
 
         match NonZeroI32::new(result) {
             None => {
-                self.initialized_logits.clone_from(batch.logits());
+                self.initialized_logits.clone_from_slice(batch.logits());
                 Ok(())
             }
-            Some(error) => Err(DecodeError::from(error)),
+            Some(error_code) => Err(error_code.into()),
         }
     }
 
@@ -91,10 +91,10 @@ impl Context {
 
         match NonZeroI32::new(result) {
             None => {
-                self.initialized_logits.clone_from(batch.logits());
+                self.initialized_logits.clone_from_slice(batch.logits());
                 Ok(())
             }
-            Some(error) => Err(EncodeError::from(error)),
+            Some(error_code) => Err(error_code.into()),
         }
     }
 
