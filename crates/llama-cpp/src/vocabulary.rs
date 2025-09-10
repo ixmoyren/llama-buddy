@@ -3,10 +3,10 @@ use crate::{
     token::Token,
 };
 use std::{
-    ffi::{c_char, CString},
+    ffi::{CString, c_char},
     ops::{Deref, DerefMut},
     ptr,
-    ptr::{slice_from_raw_parts, NonNull},
+    ptr::{NonNull, slice_from_raw_parts},
 };
 
 /// `llama_vocab` 的包装

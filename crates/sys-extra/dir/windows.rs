@@ -1,6 +1,6 @@
 use std::{
     env::home_dir,
-    ffi::{c_void, OsString},
+    ffi::{OsString, c_void},
     os::windows::ffi::OsStrExt,
     path::PathBuf,
     ptr, slice,
@@ -8,13 +8,13 @@ use std::{
 
 use crate::dir::{BaseDirs, UserDirs};
 use windows_sys::{
-    core::{GUID, PWSTR},
     Win32::{
         Foundation::S_OK,
         Globalization::lstrlenW,
         System::Com::CoTaskMemFree,
         UI::{Shell, Shell::KF_FLAG_DONT_VERIFY},
     },
+    core::{GUID, PWSTR},
 };
 
 pub fn base_dirs() -> Option<BaseDirs> {

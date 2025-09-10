@@ -56,8 +56,8 @@ mod tests {
     use std::{
         future,
         sync::{
-            atomic::{AtomicUsize, Ordering},
             Arc,
+            atomic::{AtomicUsize, Ordering},
         },
     };
 
