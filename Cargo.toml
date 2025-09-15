@@ -36,7 +36,7 @@ http-extra = { workspace = true }
 llama-buddy-macro = { workspace = true }
 reqwest = { workspace = true }
 rusqlite = { workspace = true, features = ["chrono", "uuid"] }
-sqlite-simple-tokenizer = "0.3.3"
+sqlite-simple-tokenizer = "0.3.4"
 scraper = "0.24.0"
 serde = { workspace = true }
 serde_json = { workspace = true }

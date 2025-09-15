@@ -274,9 +274,9 @@ checksum = "d71b6127be86fdcfddb610f7182ac57211d4b18a3e9c82eb2d17662f2227ad6a"
 
 [[package]]
 name = "cc"
-version = "1.2.36"
+version = "1.2.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5252b3d2648e5eedbc1a6f501e3c795e07025c1e93bbf8bbdd6eef7f447a6d54"
+checksum = "65193589c6404eb80b450d618eaf9a2cafaaafd57ecce47370519ef674a7bd44"
 dependencies = [
     "find-msvc-tools",
     "jobserver",
@@ -1214,9 +1214,9 @@ dependencies = [
 
 [[package]]
 name = "iana-time-zone"
-version = "0.1.63"
+version = "0.1.64"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b0c919e5debc312ad217002b8048a17b7d83f80703865bbfcfebb0458b0b27d8"
+checksum = "33e57f83510bb73707521ebaffa789ec8caf86f9657cad665b092b581d40e9fb"
 dependencies = [
     "android_system_properties",
     "core-foundation-sys",
@@ -1224,7 +1224,7 @@ dependencies = [
     "js-sys",
     "log",
     "wasm-bindgen",
-    "windows-core",
+    "windows-core 0.62.0",
 ]
 
 [[package]]
@@ -2390,9 +2390,9 @@ dependencies = [
 
 [[package]]
 name = "resolv-conf"
-version = "0.7.4"
+version = "0.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95325155c684b1c89f7765e30bc1c42e4a6da51ca513615660cb8a62ef9a88e3"
+checksum = "6b3789b30bd25ba102de4beabd95d21ac45b69b1be7d14522bab988c526d6799"
 
 [[package]]
 name = "ring"
@@ -2428,16 +2428,6 @@ dependencies = [
     "libsqlite3-sys",
     "smallvec",
     "uuid",
-]
-
-[[package]]
-name = "rust-stemmers"
-version = "1.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e46a2036019fdb888131db7a4c847a1063a7493f971ed94ea82c67eada63ca54"
-dependencies = [
-    "serde",
-    "serde_derive",
 ]
 
 [[package]]
@@ -2518,7 +2508,7 @@ checksum = "b39cdef0fa800fc44525c84ccb54a029961a8215f9619753635a9c0d2538d46d"
 [[package]]
 name = "rustyline"
 version = "17.0.1"
-source = "git+https://github.com/kkawakam/rustyline.git#b16f9a3e36191bb1956b15ab86eda98fcb44d9b1"
+source = "git+https://github.com/kkawakam/rustyline.git#17696602d0f4722f6d838555762f155f674dee9f"
 dependencies = [
     "bitflags",
     "cfg-if",
@@ -2540,7 +2530,7 @@ dependencies = [
 [[package]]
 name = "rustyline-derive"
 version = "0.11.1"
-source = "git+https://github.com/kkawakam/rustyline.git#b16f9a3e36191bb1956b15ab86eda98fcb44d9b1"
+source = "git+https://github.com/kkawakam/rustyline.git#17696602d0f4722f6d838555762f155f674dee9f"
 dependencies = [
     "proc-macro2",
     "quote",
@@ -2624,24 +2614,34 @@ dependencies = [
 
 [[package]]
 name = "semver"
-version = "1.0.26"
+version = "1.0.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56e6fa9c48d24d85fb3de5ad847117517440f6beceb7798af16b4a87d616b8d0"
+checksum = "d767eb0aabc880b29956c35734170f26ed551a859dbd361d140cdbeca61ab1e2"
 
 [[package]]
 name = "serde"
-version = "1.0.219"
+version = "1.0.223"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f0e2c6ed6606019b4e29e69dbaba95b11854410e5347d525002456dbbb786b6"
+checksum = "a505d71960adde88e293da5cb5eda57093379f64e61cf77bf0e6a63af07a7bac"
+dependencies = [
+    "serde_core",
+    "serde_derive",
+]
+
+[[package]]
+name = "serde_core"
+version = "1.0.223"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "20f57cbd357666aa7b3ac84a90b4ea328f1d4ddb6772b430caa5d9e1309bb9e9"
 dependencies = [
     "serde_derive",
 ]
 
 [[package]]
 name = "serde_derive"
-version = "1.0.219"
+version = "1.0.223"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b0276cf7f2c73365f7157c8123c21cd9a50fbbd844757af28ca1f5925fc2a00"
+checksum = "3d428d07faf17e306e699ec1e91996e5a165ba5d6bce5b5155173e91a8a01a56"
 dependencies = [
     "proc-macro2",
     "quote",
@@ -2650,24 +2650,26 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.143"
+version = "1.0.145"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d401abef1d108fbd9cbaebc3e46611f4b1021f714a0597a71f41ee463f5f4a5a"
+checksum = "402a6f66d8c709116cf22f558eab210f5a50187f702eb4d7e5ef38d9a7f1c79c"
 dependencies = [
     "itoa",
     "memchr",
     "ryu",
     "serde",
+    "serde_core",
 ]
 
 [[package]]
 name = "serde_path_to_error"
-version = "0.1.17"
+version = "0.1.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59fab13f937fa393d08645bf3a84bdfe86e296747b506ada67bb15f10f218b2a"
+checksum = "a30a8abed938137c7183c173848e3c9b3517f5e038226849a4ecc9b21a4b4e2a"
 dependencies = [
     "itoa",
     "serde",
+    "serde_core",
 ]
 
 [[package]]
@@ -2775,9 +2777,9 @@ dependencies = [
 
 [[package]]
 name = "sqlite-simple-tokenizer"
-version = "0.3.3"
+version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a24e8437f9d9e72d156343571132a2cab39c01f57d28b5914254916d9540de79"
+checksum = "ecbd0daa5c827a276dd0c0a15ccf07bb16a1cbcb44e249cebc0273d28d4bcd75"
 dependencies = [
     "env_logger",
     "jieba-rs",
@@ -2785,9 +2787,9 @@ dependencies = [
     "phf 0.13.1",
     "phf_codegen 0.13.1",
     "rusqlite",
-    "rust-stemmers",
     "unicode-normalization",
     "unicode-segmentation",
+    "waken_snowball",
 ]
 
 [[package]]
@@ -3397,6 +3399,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
+name = "waken_snowball"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "16a3e068c98d5736c4b5d2dfc0ab9f3b1dcb8f9dbc5a22bde166550c5d3788c0"
+
+[[package]]
 name = "walkdir"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3574,7 +3582,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9babd3a767a4c1aef6900409f85f5d53ce2544ccdfaa86dad48c91782c6d6893"
 dependencies = [
     "windows-collections",
-    "windows-core",
+    "windows-core 0.61.2",
     "windows-future",
     "windows-link 0.1.3",
     "windows-numerics",
@@ -3586,7 +3594,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3beeceb5e5cfd9eb1d76b381630e82c4241ccd0d27f1a39ed41b2760b255c5e8"
 dependencies = [
-    "windows-core",
+    "windows-core 0.61.2",
 ]
 
 [[package]]
@@ -3598,8 +3606,21 @@ dependencies = [
     "windows-implement",
     "windows-interface",
     "windows-link 0.1.3",
-    "windows-result",
-    "windows-strings",
+    "windows-result 0.3.4",
+    "windows-strings 0.4.2",
+]
+
+[[package]]
+name = "windows-core"
+version = "0.62.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57fe7168f7de578d2d8a05b07fd61870d2e73b4020e9f49aa00da8471723497c"
+dependencies = [
+    "windows-implement",
+    "windows-interface",
+    "windows-link 0.2.0",
+    "windows-result 0.4.0",
+    "windows-strings 0.5.0",
 ]
 
 [[package]]
@@ -3608,7 +3629,7 @@ version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc6a41e98427b19fe4b73c550f060b59fa592d7d686537eebf9385621bfbad8e"
 dependencies = [
-    "windows-core",
+    "windows-core 0.61.2",
     "windows-link 0.1.3",
     "windows-threading",
 ]
@@ -3653,7 +3674,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9150af68066c4c5c07ddc0ce30421554771e528bde427614c61038bc2c92c2b1"
 dependencies = [
-    "windows-core",
+    "windows-core 0.61.2",
     "windows-link 0.1.3",
 ]
 
@@ -3664,8 +3685,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b8a9ed28765efc97bbc954883f4e6796c33a06546ebafacbabee9696967499e"
 dependencies = [
     "windows-link 0.1.3",
-    "windows-result",
-    "windows-strings",
+    "windows-result 0.3.4",
+    "windows-strings 0.4.2",
 ]
 
 [[package]]
@@ -3678,12 +3699,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "windows-result"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7084dcc306f89883455a206237404d3eaf961e5bd7e0f312f7c91f57eb44167f"
+dependencies = [
+    "windows-link 0.2.0",
+]
+
+[[package]]
 name = "windows-strings"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56e6c93f3a0c3b36176cb1327a4958a0353d5d166c2a35cb268ace15e91d3b57"
 dependencies = [
     "windows-link 0.1.3",
+]
+
+[[package]]
+name = "windows-strings"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7218c655a553b0bed4426cf54b20d7ba363ef543b52d515b3e48d7fd55318dda"
+dependencies = [
+    "windows-link 0.2.0",
 ]
 
 [[package]]
