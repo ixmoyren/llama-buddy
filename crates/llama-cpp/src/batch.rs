@@ -13,6 +13,10 @@ impl Batch {
         self.initialized_logits.as_slice()
     }
 
+    pub(crate) fn logits_ref(&self) -> &Vec<i32> {
+        self.initialized_logits.as_ref()
+    }
+
     pub fn raw(&self) -> llama_cpp_sys::llama_batch {
         self.raw
     }
