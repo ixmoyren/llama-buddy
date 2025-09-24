@@ -103,7 +103,6 @@ pub fn insert_model_info(conn: &mut Connection, info: ModelInfo) -> anyhow::Resu
         );
         is_failed = true;
     }
-    info!("{}, {}", info.title, info.models.len());
     for model in info.models {
         let id = Uuid::now_v7();
         let result = tx.execute(

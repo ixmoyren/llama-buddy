@@ -118,10 +118,19 @@ pub async fn init_local_registry(args: InitArgs) -> anyhow::Result<()> {
         let conn_two = Arc::clone(&conn);
         let receive_job_two = tokio::spawn(async move {
             let mut conn = conn_two.lock().await;
+            let mut all_success = true;
             while let Some(model) = mpsc_rx.recv().await {
-                let _ = insert_model_info(&mut conn, model);
+                if let Ok(is_success) = insert_model_info(&mut conn, model)
+                    && !is_success
+                {
+                    all_success = false;
+                }
             }
-            let _ = completed_init(&conn, CompletedStatus::Completed);
+            if all_success {
+                completed_init(&conn, CompletedStatus::Completed).unwrap();
+            } else {
+                completed_init(&conn, CompletedStatus::Failed).unwrap();
+            }
         });
         let _ = tokio::join!(send_job, receive_job_one, receive_job_two);
     }

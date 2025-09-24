@@ -45,7 +45,7 @@ pub(crate) async fn fetch_model_more_info(
 
 fn covert_to_model_tag(html: impl AsRef<str>) -> anyhow::Result<Vec<Model>> {
     let html = Html::parse_document(html.as_ref());
-    let tag_table = get_selector("main section > div > div > div")?;
+    let tag_table = get_selector("body section > div > div > div")?;
     let tag_href = get_selector("div > span > a")?;
     let tag_p = get_selector("div > p")?;
     let tag_input = get_selector("div > div.col-span-2")?;
