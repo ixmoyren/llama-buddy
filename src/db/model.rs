@@ -1,6 +1,6 @@
 use rusqlite::Connection;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tracing::error;
+use tracing::{error, info};
 use uuid::Uuid;
 
 const INSERT_INTO_MODEL_INFO: &str = r#"
@@ -75,60 +75,55 @@ pub(crate) struct Model {
     pub(crate) hash: String,
 }
 
-pub fn insert_model_info(
-    conn: &mut Connection,
-    model_infos: impl IntoIterator<Item = ModelInfo>,
-) -> anyhow::Result<bool> {
+pub fn insert_model_info(conn: &mut Connection, info: ModelInfo) -> anyhow::Result<bool> {
     // 开启一个事务
     let tx = conn.transaction()?;
     let mut is_failed = false;
     let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as i64;
-    'i: for info in model_infos.into_iter() {
-        let model_id = Uuid::now_v7();
+    let model_id = Uuid::now_v7();
+    let result = tx.execute(
+        INSERT_INTO_MODEL_INFO,
+        (
+            &model_id,
+            &info.title,
+            &info.href,
+            &info.introduction,
+            &info.pull_count,
+            &info.tag_count,
+            &info.summary,
+            &info.readme,
+            &info.updated_time,
+            &now,
+        ),
+    );
+    if let Err(err) = result {
+        error!(
+            "Insert model info failed, err is {err}, model id is {model_id}, title is {}",
+            info.title
+        );
+        is_failed = true;
+    }
+    info!("{}, {}", info.title, info.models.len());
+    for model in info.models {
+        let id = Uuid::now_v7();
         let result = tx.execute(
-            INSERT_INTO_MODEL_INFO,
+            INSERT_INTO_MODEL,
             (
+                &id,
+                &model.name,
+                &model.href,
+                &model.size,
+                &model.context,
+                &model.input,
+                &model.hash,
                 &model_id,
-                &info.title,
-                &info.href,
-                &info.introduction,
-                &info.pull_count,
-                &info.tag_count,
-                &info.summary,
-                &info.readme,
-                &info.updated_time,
                 &now,
             ),
         );
         if let Err(err) = result {
-            error!(
-                "Insert model info failed, err is {err}, model id is {model_id}, title is {}",
-                info.title
-            );
+            error!("Insert model failed, err is {err}, id is {id}, model is {model:?}");
             is_failed = true;
             break;
-        }
-        for model in info.models {
-            let id = Uuid::now_v7();
-            let result = tx.execute(
-                INSERT_INTO_MODEL,
-                (
-                    &id,
-                    &model.name,
-                    &model.href,
-                    &model.size,
-                    &model.context,
-                    &model.input,
-                    &model.hash,
-                    &model_id,
-                    &now,
-                ),
-            );
-            if let Err(err) = result {
-                error!("Insert model failed, err is {err}, id is {id}, model is {model:?}");
-                is_failed = true;
-                break 'i;
-            }
         }
     }
     // 插入一条失败就全部回退事务

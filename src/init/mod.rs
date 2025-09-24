@@ -6,19 +6,19 @@ mod model;
 use crate::{
     config::{Config, Data, HttpClient as HttpClientConfig, Registry},
     db,
-    db::{check_init_completed, check_insert_model_info_completed},
+    db::{
+        CompletedStatus, check_init_completed, check_insert_model_info_completed, completed_init,
+        insert_model_info,
+    },
     init::{
         config::save_library_to_config,
-        model::{fetch_library_html, save_model_info},
+        model::{convert_to_model_infos, fetch_library_html, fetch_model_more_info},
     },
 };
 use clap::Args;
 use rusqlite::Connection;
-use std::{fs, path::PathBuf, sync::Arc};
-use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    sync::{Mutex, RwLock, broadcast::error::RecvError},
-};
+use std::{collections::VecDeque, fs, path::PathBuf, sync::Arc};
+use tokio::sync::Mutex;
 use tracing::{error, info};
 use url::Url;
 
@@ -63,26 +63,49 @@ pub async fn init_local_registry(args: InitArgs) -> anyhow::Result<()> {
         return Ok(());
     }
     if !check_insert_model_info_completed(&conn)? {
-        // 创建一个单生产者多消费者的队列
-        let (sender, mut receiver_one) = tokio::sync::broadcast::channel::<String>(16);
-        let mut receiver_two = sender.subscribe();
+        // 创建一个单生产者单消费者的 channel，用来传递 library_html
+        let (oneshot_tx, oneshot_rx) = tokio::sync::oneshot::channel::<String>();
+        let (mpsc_tx, mut mpsc_rx) = tokio::sync::mpsc::channel(256);
         // 生产者为从 ollama.com 中获取的全部模型列表的数据
         let remote_registry = remote.clone();
         let send_job = tokio::spawn(async move {
-            let library_html = fetch_library_html(client.clone(), remote_registry)
+            let library_html = fetch_library_html(client.clone(), remote_registry.clone())
                 .await
                 .unwrap_or_else(|error| {
                     error!("fetch library html failed, {error}");
                     "".to_owned()
                 });
-            sender
+            let library_html_str = library_html.as_str();
+            let mut model_infos =
+                convert_to_model_infos(library_html_str).unwrap_or_else(|error| {
+                    error!("convert to model info failed, {error}");
+                    VecDeque::default()
+                });
+            oneshot_tx
                 .send(library_html)
                 .expect("send library html to channel failed!");
+            for model_info in model_infos.iter_mut() {
+                let (summary, readme, html_raw, model_tag_vec) =
+                    fetch_model_more_info(&model_info, client.clone(), remote_registry.clone())
+                        .await
+                        .expect("fetch model more info failed!");
+                model_info.summary = summary;
+                model_info.readme = readme;
+                model_info.html_raw = html_raw;
+                model_info.models = model_tag_vec;
+                mpsc_tx
+                    .send(model_info.to_owned())
+                    .await
+                    .unwrap_or_else(|error| {
+                        error!("send model info to channel failed, {error}");
+                    });
+            }
         });
         let conn = Arc::new(Mutex::new(conn));
         let conn_one = Arc::clone(&conn);
+        // 将 library_html 保存到 config
         let receive_job_one = tokio::spawn(async move {
-            match receiver_one.recv().await {
+            match oneshot_rx.await {
                 Ok(html) => {
                     let conn = conn_one.lock().await;
                     save_library_to_config(html, &conn);
@@ -94,15 +117,11 @@ pub async fn init_local_registry(args: InitArgs) -> anyhow::Result<()> {
         });
         let conn_two = Arc::clone(&conn);
         let receive_job_two = tokio::spawn(async move {
-            match receiver_two.recv().await {
-                Ok(html) => {
-                    let mut conn = conn_two.lock().await;
-                    save_model_info(html, &mut conn)
-                }
-                Err(err) => {
-                    error!("receiver two get the library html from channel failed, {err}");
-                }
+            let mut conn = conn_two.lock().await;
+            while let Some(model) = mpsc_rx.recv().await {
+                let _ = insert_model_info(&mut conn, model);
             }
+            let _ = completed_init(&conn, CompletedStatus::Completed);
         });
         let _ = tokio::join!(send_job, receive_job_one, receive_job_two);
     }

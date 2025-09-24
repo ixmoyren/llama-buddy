@@ -1,7 +1,6 @@
-use crate::db::{CompletedStatus, Model, ModelInfo, completed_init, insert_model_info};
+use crate::db::{Model, ModelInfo};
 use anyhow::anyhow;
 use reqwest::Client;
-use rusqlite::Connection;
 use scraper::{ElementRef, Html, Selector};
 use std::collections::VecDeque;
 use tracing::debug;
@@ -18,47 +17,30 @@ pub(crate) async fn fetch_library_html(
     Ok(library_html)
 }
 
-pub(crate) fn save_model_info(html: String, conn: &mut Connection) {
-    let model_infos = convert_to_model_infos(html).unwrap();
-    if insert_model_info(conn, model_infos).unwrap() {
-        // 完成初始化
-        completed_init(conn, CompletedStatus::Completed).unwrap();
-    } else {
-        completed_init(conn, CompletedStatus::InProgress).unwrap();
-    }
-}
-
-pub(crate) async fn fetch_model_info(
-    html: String,
+// 获取到一个模型的基本信息
+// 模型有不同的规格，每个规格的模型一般会提供四个文件，一个是模型本体，一个是许可，一个是模板，一个是提示词
+// 通过 href 可以访问到这个模型的详细页面
+// 从详细页面中获取模型 summary 和 readme
+// 从 /tags 页面可以获取全部的规格列表
+pub(crate) async fn fetch_model_more_info(
+    model: &ModelInfo,
     client: Client,
     remote_registry: Url,
-) -> anyhow::Result<impl IntoIterator<Item = ModelInfo>> {
-    // 获取到一个模型的基本信息
-    // 模型有不同的规格，每个规格的模型一般会提供四个文件，一个是模型本体，一个是许可，一个是模板，一个是提示词
-    // 通过 href 可以访问到这个模型的详细页面
-    // 从详细页面中获取模型 summary 和 readme
-    // 从 /tags 页面可以获取全部的规格列表
-    let mut models = convert_to_model_infos(html)?;
-    for model_info in models.iter_mut() {
-        // 获取模型的 summary 和 readme
-        let model_href = model_info.href.as_str();
-        let model_url = remote_registry.join(model_href)?;
-        let response = client.get(model_url).send().await?;
-        let model_html = response.text().await?;
-        let html_str = model_html.as_str();
-        let (summary, readme) = convert_to_model_summary(html_str)?;
-        model_info.summary = summary;
-        model_info.readme = readme;
-        model_info.html_raw = model_html;
-        // 获取模型的全部 tags
-        let model_all_tags_url = format!("{model_href}/tags");
-        let model_tags_url = remote_registry.join(model_all_tags_url.as_str())?;
-        let response = client.get(model_tags_url).send().await?;
-        let model_all_tag_html = response.text().await?;
-        let models = covert_to_model_tag(model_all_tag_html)?;
-        model_info.models = models;
-    }
-    Ok(models)
+) -> anyhow::Result<(String, String, String, Vec<Model>)> {
+    // 获取模型的 summary 和 readme
+    let model_href = model.href.as_str();
+    let model_url = remote_registry.join(model_href)?;
+    let response = client.get(model_url).send().await?;
+    let model_html = response.text().await?;
+    let html_str = model_html.as_str();
+    let (summary, readme) = convert_to_model_summary(html_str)?;
+    // 获取模型的全部 tags
+    let model_all_tags_url = format!("{model_href}/tags");
+    let model_tags_url = remote_registry.join(model_all_tags_url.as_str())?;
+    let response = client.get(model_tags_url).send().await?;
+    let model_all_tag_html = response.text().await?;
+    let model_tag_vec = covert_to_model_tag(model_all_tag_html)?;
+    Ok((summary, readme, model_html, model_tag_vec))
 }
 
 fn covert_to_model_tag(html: impl AsRef<str>) -> anyhow::Result<Vec<Model>> {
@@ -127,7 +109,7 @@ fn convert_to_model_summary(html: impl AsRef<str>) -> anyhow::Result<(String, St
     Ok((summary, readme))
 }
 
-fn convert_to_model_infos(html: impl AsRef<str>) -> anyhow::Result<VecDeque<ModelInfo>> {
+pub(crate) fn convert_to_model_infos(html: impl AsRef<str>) -> anyhow::Result<VecDeque<ModelInfo>> {
     let html = Html::parse_document(html.as_ref());
     let li_selector = get_selector("div#repo > ul li a")?;
     let title_selector = get_selector("div [x-test-model-title]")?;
