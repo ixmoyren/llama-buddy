@@ -59,46 +59,41 @@ create table if not exists model
 
 create unique index if not exists model_unique on model (name);
 
--- 对 title 和 introduction 创建倒排索引
+-- 对 title、introduction、summary、readme 创建倒排索引
 create virtual table if not exists model_info_fts using fts5
 (
-    content = 'model_info',
-    content_rowid = 'id',
     title,
     introduction,
     summary,
     readme,
+    content = 'model_info',
     tokenize = 'jieba'
 );
 
-create trigger if not exists model_info_before_update
-    before update
+create trigger if not exists model_info_after_insert
+    after insert
     on model_info
 begin
-    delete from model_info_fts where ROWID = old.ROWID;
+    insert into model_info_fts(title, introduction, summary, readme)
+    values (new.title, new.introduction, new.summary, new.readme);
 end;
 
-create trigger if not exists model_info_before_delete
-    before delete
+create trigger if not exists model_info_after_delete
+    after delete
     on model_info
 begin
-    delete from model_info_fts where ROWID = old.ROWID;
+    insert into model_info_fts(model_info_fts, title, introduction, summary, readme)
+    values ('delete', old.title, old.introduction, old.summary, old.readme);
 end;
 
 create trigger if not exists model_info_after_update
     after update
     on model_info
 begin
-    insert into model_info_fts(ROWID, title, introduction, summary, readme)
-    values (new.ROWID, new.title, new.introduction, new.summary, new.readme);
-end;
-
-create trigger if not exists model_info_after_insert
-    after insert
-    on model_info
-begin
-    insert into model_info_fts(ROWID, title, introduction, summary, readme)
-    values (new.ROWID, new.title, new.introduction, new.summary, new.readme);
+    insert into model_info_fts(model_info_fts, title, introduction, summary, readme)
+    values ('delete', old.title, old.introduction, old.summary, old.readme);
+    insert into model_info_fts(title, introduction, summary, readme)
+    values (new.title, new.introduction, new.summary, new.readme);
 end;
 
 -- 设置数据库的用户版本好为 1，标识数据库已经初始化

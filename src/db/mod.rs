@@ -31,7 +31,7 @@ pub fn open(path: impl AsRef<Path>, db_name: impl AsRef<str>) -> anyhow::Result<
 
 // 检查相关表结构有没有创建好
 fn check_schema(conn: &Connection) -> anyhow::Result<()> {
-    let user_version: i32 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
+    let user_version = conn.pragma_query_value(None, "user_version", |r| r.get::<_, i32>(0))?;
     if user_version <= 0 {
         conn.execute_batch(INIT_DB_SQL)?;
     }
@@ -40,10 +40,10 @@ fn check_schema(conn: &Connection) -> anyhow::Result<()> {
 
 // 检查是否完成初始化
 pub fn check_init_completed(conn: &Connection) -> anyhow::Result<bool> {
-    let init_status: Vec<u8> = conn.query_row(
+    let init_status = conn.query_row(
         "select value from config where name = 'init_status'",
         [],
-        |r| r.get(0),
+        |r| r.get::<_, Vec<u8>>(0),
     )?;
     let init_status = String::from_utf8(init_status)?;
     Ok(init_status == "Completed")

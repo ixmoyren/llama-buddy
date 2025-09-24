@@ -1,26 +1,44 @@
-use crate::db::{Model, ModelInfo};
+use crate::db::{CompletedStatus, Model, ModelInfo, completed_init, insert_model_info};
 use anyhow::anyhow;
 use reqwest::Client;
+use rusqlite::Connection;
 use scraper::{ElementRef, Html, Selector};
 use std::collections::VecDeque;
 use tracing::debug;
 use url::Url;
 
-pub(crate) async fn fetch_model_info(
+pub(crate) async fn fetch_library_html(
     client: Client,
     remote_registry: Url,
-) -> anyhow::Result<(String, impl IntoIterator<Item = ModelInfo>)> {
+) -> anyhow::Result<String> {
     let library_url = remote_registry.join("/library?sort=newest")?;
     debug!("Fetching model information from {library_url:?}");
     let response = client.get(library_url).send().await?;
     let library_html = response.text().await?;
-    let library_html_str = library_html.as_str();
+    Ok(library_html)
+}
+
+pub(crate) fn save_model_info(html: String, conn: &mut Connection) {
+    let model_infos = convert_to_model_infos(html).unwrap();
+    if insert_model_info(conn, model_infos).unwrap() {
+        // 完成初始化
+        completed_init(conn, CompletedStatus::Completed).unwrap();
+    } else {
+        completed_init(conn, CompletedStatus::InProgress).unwrap();
+    }
+}
+
+pub(crate) async fn fetch_model_info(
+    html: String,
+    client: Client,
+    remote_registry: Url,
+) -> anyhow::Result<impl IntoIterator<Item = ModelInfo>> {
     // 获取到一个模型的基本信息
     // 模型有不同的规格，每个规格的模型一般会提供四个文件，一个是模型本体，一个是许可，一个是模板，一个是提示词
     // 通过 href 可以访问到这个模型的详细页面
     // 从详细页面中获取模型 summary 和 readme
     // 从 /tags 页面可以获取全部的规格列表
-    let mut models = convert_to_model_infos(library_html_str)?;
+    let mut models = convert_to_model_infos(html)?;
     for model_info in models.iter_mut() {
         // 获取模型的 summary 和 readme
         let model_href = model_info.href.as_str();
@@ -40,7 +58,7 @@ pub(crate) async fn fetch_model_info(
         let models = covert_to_model_tag(model_all_tag_html)?;
         model_info.models = models;
     }
-    Ok((library_html, models))
+    Ok(models)
 }
 
 fn covert_to_model_tag(html: impl AsRef<str>) -> anyhow::Result<Vec<Model>> {

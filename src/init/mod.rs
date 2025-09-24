@@ -1,19 +1,25 @@
 //! 初始化本地注册表
 
+mod config;
 mod model;
 
 use crate::{
     config::{Config, Data, HttpClient as HttpClientConfig, Registry},
     db,
-    db::{
-        CompletedStatus, check_init_completed, check_insert_model_info_completed, completed_init,
-        insert_config, insert_model_info,
+    db::{check_init_completed, check_insert_model_info_completed},
+    init::{
+        config::save_library_to_config,
+        model::{fetch_library_html, save_model_info},
     },
-    init::model::fetch_model_info,
 };
 use clap::Args;
-use std::{fs, path::PathBuf};
-use tracing::info;
+use rusqlite::Connection;
+use std::{fs, path::PathBuf, sync::Arc};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    sync::{Mutex, RwLock, broadcast::error::RecvError},
+};
+use tracing::{error, info};
 use url::Url;
 
 pub async fn init_local_registry(args: InitArgs) -> anyhow::Result<()> {
@@ -48,33 +54,57 @@ pub async fn init_local_registry(args: InitArgs) -> anyhow::Result<()> {
     if force {
         fs::remove_dir_all(data_path.as_path())?
     }
-    // 拉取 sqlite 的 simple 插件和词库，用于数据库检索
+    // 打开数据库文件，创建数据库并且创建配置表、模型信息表
     let sqlite_dir = data_path.join("sqlite");
-    // 创建数据库并且创建配置表、模型信息表
     let conn = db::open(sqlite_dir, "llama-buddy.sqlite")?;
-    // 检查一下有没有完成初始化
+    // 检查一下有没有完成初始化，初始化已经完成，那么直接退出
     if check_init_completed(&conn)? {
         info!("Initialization completed");
         return Ok(());
     }
-    let mut conn = conn;
     if !check_insert_model_info_completed(&conn)? {
-        // 拉取远程服务器上的数据，并且保存到模型信息表中
-        let (html, model_infos) = fetch_model_info(client.clone(), remote.clone()).await?;
-        let html = html.as_bytes();
-        let html_sha256 = http_extra::sha256::digest(html);
-        insert_config(
-            &conn,
-            "model_library_html_digest".to_owned(),
-            html_sha256.as_bytes().to_vec(),
-        )?;
-        insert_config(&conn, "model_library_html_data".to_owned(), html.to_vec())?;
-        if insert_model_info(&mut conn, model_infos)? {
-            // 完成初始化
-            completed_init(&conn, CompletedStatus::Completed)?;
-        } else {
-            completed_init(&conn, CompletedStatus::InProgress)?;
-        }
+        // 创建一个单生产者多消费者的队列
+        let (sender, mut receiver_one) = tokio::sync::broadcast::channel::<String>(16);
+        let mut receiver_two = sender.subscribe();
+        // 生产者为从 ollama.com 中获取的全部模型列表的数据
+        let remote_registry = remote.clone();
+        let send_job = tokio::spawn(async move {
+            let library_html = fetch_library_html(client.clone(), remote_registry)
+                .await
+                .unwrap_or_else(|error| {
+                    error!("fetch library html failed, {error}");
+                    "".to_owned()
+                });
+            sender
+                .send(library_html)
+                .expect("send library html to channel failed!");
+        });
+        let conn = Arc::new(Mutex::new(conn));
+        let conn_one = Arc::clone(&conn);
+        let receive_job_one = tokio::spawn(async move {
+            match receiver_one.recv().await {
+                Ok(html) => {
+                    let conn = conn_one.lock().await;
+                    save_library_to_config(html, &conn);
+                }
+                Err(err) => {
+                    error!("receiver one get the library html from channel failed, {err}");
+                }
+            }
+        });
+        let conn_two = Arc::clone(&conn);
+        let receive_job_two = tokio::spawn(async move {
+            match receiver_two.recv().await {
+                Ok(html) => {
+                    let mut conn = conn_two.lock().await;
+                    save_model_info(html, &mut conn)
+                }
+                Err(err) => {
+                    error!("receiver two get the library html from channel failed, {err}");
+                }
+            }
+        });
+        let _ = tokio::join!(send_job, receive_job_one, receive_job_two);
     }
     // 保存 cli 传入的参数到配置文件中
     if saved {

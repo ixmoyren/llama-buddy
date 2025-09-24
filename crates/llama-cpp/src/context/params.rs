@@ -1,5 +1,5 @@
 //! A safe wrapper around `llama_context_params`.
-use std::{fmt::Debug, num::NonZeroU32};
+use std::{ffi::c_int, fmt::Debug, num::NonZeroU32};
 
 /// `rope_scaling_type` 包装器
 #[repr(i8)]
@@ -9,6 +9,13 @@ pub enum RopeScalingType {
     None = 0,
     Linear = 1,
     Yarn = 2,
+}
+
+impl From<c_int> for RopeScalingType {
+    fn from(value: c_int) -> Self {
+        let i = value as i32;
+        i.into()
+    }
 }
 
 impl From<i32> for RopeScalingType {
@@ -47,8 +54,13 @@ pub enum PoolingType {
     Rank = 4,
 }
 
-/// Create a `LlamaPoolingType` from a `c_int` - returns `LlamaPoolingType::Unspecified` if
-/// the value is not recognized.
+impl From<c_int> for PoolingType {
+    fn from(value: c_int) -> Self {
+        let i = value as i32;
+        i.into()
+    }
+}
+
 impl From<i32> for PoolingType {
     fn from(value: i32) -> Self {
         use PoolingType::*;
