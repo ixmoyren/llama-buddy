@@ -1,4 +1,5 @@
-use rusqlite::Connection;
+use http_extra::sha256::digest;
+use rusqlite::{Connection, Transaction};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::{error, info};
 use uuid::Uuid;
@@ -15,6 +16,14 @@ on conflict (title, href) do update set title        = excluded.title,
                                         readme       = excluded.readme,
                                         updated_time = excluded.updated_time,
                                         updated_at   = strftime('%s', 'now');"#;
+
+const INSERT_INTO_LIBRARY_RAW_DATA: &str = r#"
+insert into library_raw_data (href, digest, raw_data, updated_at)
+values (?1, ?2, ?3, ?4)
+on conflict (href) do update set href       = excluded.href,
+                                 digest     = excluded.digest,
+                                 raw_data   = excluded.raw_data,
+                                 updated_at = strftime('%s', 'now');"#;
 
 const INSERT_INTO_MODEL: &str = r#"
 insert into model (id, name, href, size, context, input, hash, model_id, updated_at)
@@ -75,10 +84,17 @@ pub(crate) struct Model {
     pub(crate) hash: String,
 }
 
+pub fn save_library_to_library_raw_data(conn: &Connection, html: String) -> anyhow::Result<bool> {
+    let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as i64;
+    let digest = digest(html.as_bytes());
+    let href = "/library?sort=newest";
+    conn.execute(INSERT_INTO_LIBRARY_RAW_DATA, (&href, &digest, &html, &now))?;
+    Ok(true)
+}
+
 pub fn insert_model_info(conn: &mut Connection, info: ModelInfo) -> anyhow::Result<bool> {
     // 开启一个事务
     let tx = conn.transaction()?;
-    let mut is_failed = false;
     let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as i64;
     let model_id = Uuid::now_v7();
     let result = tx.execute(
@@ -101,7 +117,19 @@ pub fn insert_model_info(conn: &mut Connection, info: ModelInfo) -> anyhow::Resu
             "Insert model info failed, err is {err}, model id is {model_id}, title is {}",
             info.title
         );
-        is_failed = true;
+        return rollback_and_return(tx);
+    }
+    let digest = digest(&info.html_raw.as_bytes());
+    let result = tx.execute(
+        INSERT_INTO_LIBRARY_RAW_DATA,
+        (&info.href, &digest, &info.html_raw, &now),
+    );
+    if let Err(err) = result {
+        error!(
+            "Insert model raw data failed, err is {err}, model id is {model_id}, title is {}, raw is {}",
+            info.title, info.html_raw
+        );
+        return rollback_and_return(tx);
     }
     for model in info.models {
         let id = Uuid::now_v7();
@@ -121,25 +149,25 @@ pub fn insert_model_info(conn: &mut Connection, info: ModelInfo) -> anyhow::Resu
         );
         if let Err(err) = result {
             error!("Insert model failed, err is {err}, id is {id}, model is {model:?}");
-            is_failed = true;
-            break;
+            return rollback_and_return(tx);
         }
     }
-    // 插入一条失败就全部回退事务
-    if is_failed {
-        tx.rollback()?;
-    } else {
-        let result = tx.execute(
+    let result = tx.execute(
             "update config set value = cast('Completed' as blob), updated_at = (?1) where name = 'insert_model_info_completed'",
             (&now,),
         );
-        match result {
-            Ok(_) => tx.commit()?,
-            Err(err) => {
-                error!("Update config set 'insert_model_info_completed' failed, err is {err}");
-                tx.rollback()?
-            }
+    match result {
+        Ok(_) => tx.commit()?,
+        Err(err) => {
+            error!("Update config set 'insert_model_info_completed' failed, err is {err}");
+            return rollback_and_return(tx);
         }
     }
-    Ok(!is_failed)
+    info!("Insert model info success, title is {}", info.title);
+    Ok(true)
+}
+
+fn rollback_and_return(tx: Transaction) -> anyhow::Result<bool> {
+    tx.rollback()?;
+    Ok(false)
 }

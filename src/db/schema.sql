@@ -19,6 +19,17 @@ values ('init_status', cast('Not Started' as blob)),
 on conflict (name) do update set value      = excluded.value,
                                  updated_at = strftime('%s', 'now');
 
+-- 用来保存 ollama.com 模型信息的元数据原始数据
+create table if not exists library_raw_data
+(
+    id         integer primary key,
+    href       text not null unique,
+    digest     text,
+    raw_data   text,
+    created_at integer default (strftime('%s', 'now')),
+    updated_at integer default (strftime('%s', 'now'))
+) strict;
+
 -- 模型信息表
 create table if not exists model_info
 (

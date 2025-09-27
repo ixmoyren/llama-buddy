@@ -1,22 +1,16 @@
 //! 初始化本地注册表
 
-mod config;
 mod model;
 
 use crate::{
-    config::{Config, Data, HttpClient as HttpClientConfig, Registry},
-    db,
+    config::{Config as LLamaBuddyConfig, Data, HttpClient as HttpClientConfig, Registry},
     db::{
-        CompletedStatus, check_init_completed, check_insert_model_info_completed, completed_init,
-        insert_model_info,
+        self, CompletedStatus, check_init_completed, check_insert_model_info_completed,
+        completed_init, insert_model_info, save_library_to_library_raw_data,
     },
-    init::{
-        config::save_library_to_config,
-        model::{convert_to_model_infos, fetch_library_html, fetch_model_more_info},
-    },
+    init::model::{convert_to_model_infos, fetch_library_html, fetch_model_more_info},
 };
 use clap::Args;
-use rusqlite::Connection;
 use std::{collections::VecDeque, fs, path::PathBuf, sync::Arc};
 use tokio::sync::Mutex;
 use tracing::{error, info};
@@ -32,7 +26,7 @@ pub async fn init_local_registry(args: InitArgs) -> anyhow::Result<()> {
         ..
     } = args;
     let (
-        Config {
+        LLamaBuddyConfig {
             data: Data { path },
             registry:
                 Registry {
@@ -42,7 +36,7 @@ pub async fn init_local_registry(args: InitArgs) -> anyhow::Result<()> {
             model,
         },
         config_path,
-    ) = Config::try_config_path()?;
+    ) = LLamaBuddyConfig::try_config_path()?;
     let data_path = new_data_path.unwrap_or(path);
     let client_config = if let Some(new) = http_client_config {
         client_config.merge(new)
@@ -64,8 +58,9 @@ pub async fn init_local_registry(args: InitArgs) -> anyhow::Result<()> {
     }
     if !check_insert_model_info_completed(&conn)? {
         // 创建一个单生产者单消费者的 channel，用来传递 library_html
-        let (oneshot_tx, oneshot_rx) = tokio::sync::oneshot::channel::<String>();
-        let (mpsc_tx, mut mpsc_rx) = tokio::sync::mpsc::channel(256);
+        let (library_html_sender, library_html_receiver) =
+            tokio::sync::oneshot::channel::<String>();
+        let (model_info_sender, mut model_info_receiver) = tokio::sync::mpsc::channel(256);
         // 生产者为从 ollama.com 中获取的全部模型列表的数据
         let remote_registry = remote.clone();
         let send_job = tokio::spawn(async move {
@@ -81,7 +76,7 @@ pub async fn init_local_registry(args: InitArgs) -> anyhow::Result<()> {
                     error!("convert to model info failed, {error}");
                     VecDeque::default()
                 });
-            oneshot_tx
+            library_html_sender
                 .send(library_html)
                 .expect("send library html to channel failed!");
             for model_info in model_infos.iter_mut() {
@@ -93,7 +88,7 @@ pub async fn init_local_registry(args: InitArgs) -> anyhow::Result<()> {
                 model_info.readme = readme;
                 model_info.html_raw = html_raw;
                 model_info.models = model_tag_vec;
-                mpsc_tx
+                model_info_sender
                     .send(model_info.to_owned())
                     .await
                     .unwrap_or_else(|error| {
@@ -105,10 +100,10 @@ pub async fn init_local_registry(args: InitArgs) -> anyhow::Result<()> {
         let conn_one = Arc::clone(&conn);
         // 将 library_html 保存到 config
         let receive_job_one = tokio::spawn(async move {
-            match oneshot_rx.await {
+            match library_html_receiver.await {
                 Ok(html) => {
                     let conn = conn_one.lock().await;
-                    save_library_to_config(html, &conn);
+                    save_library_to_library_raw_data(&conn, html).unwrap();
                 }
                 Err(err) => {
                     error!("receiver one get the library html from channel failed, {err}");
@@ -119,7 +114,7 @@ pub async fn init_local_registry(args: InitArgs) -> anyhow::Result<()> {
         let receive_job_two = tokio::spawn(async move {
             let mut conn = conn_two.lock().await;
             let mut all_success = true;
-            while let Some(model) = mpsc_rx.recv().await {
+            while let Some(model) = model_info_receiver.recv().await {
                 if let Ok(is_success) = insert_model_info(&mut conn, model)
                     && !is_success
                 {
@@ -136,7 +131,7 @@ pub async fn init_local_registry(args: InitArgs) -> anyhow::Result<()> {
     }
     // 保存 cli 传入的参数到配置文件中
     if saved {
-        let config = Config {
+        let config = LLamaBuddyConfig {
             data: Data { path: data_path },
             registry: Registry {
                 client: client_config,

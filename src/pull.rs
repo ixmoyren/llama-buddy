@@ -54,7 +54,7 @@ pub async fn pull_model_from_registry(args: PullArgs) -> anyhow::Result<()> {
     let manifest: Manifest = from_str(&response_text)?;
     // let backoff = Arc::new(backoff);
     // 获取重试时超时设置
-    let chunk_timeout = client_config.build_chunk_timout();
+    let chunk_timeout = client_config.build_chunk_timeout();
     for layer in manifest.layers {
         let Layer {
             media_type, digest, ..

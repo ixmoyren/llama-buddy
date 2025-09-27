@@ -8,14 +8,14 @@ use std::{
     collections::VecDeque,
     env,
     env::VarError,
-    fs::{File, OpenOptions, create_dir_all},
+    fs::{create_dir_all, File, OpenOptions},
     io::{Read, Write},
     path::{Path, PathBuf},
     thread,
     time::Duration,
 };
 use sys_extra::dir::BaseDirs;
-use toml_edit::{DocumentMut, Table, value};
+use toml_edit::{value, DocumentMut, Table};
 use url::Url;
 
 const LLAMA_BUDDY_CONFIG: &str = include_str!("llama-buddy.toml");
@@ -300,13 +300,6 @@ pub struct Data {
     pub path: PathBuf,
 }
 
-impl Data {
-    pub fn path(mut self, new: PathBuf) -> Self {
-        self.path = new;
-        self
-    }
-}
-
 /// 注册表配置项
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Registry {
@@ -316,18 +309,6 @@ pub struct Registry {
     pub client: HttpClient,
 }
 
-impl Registry {
-    pub fn remote(mut self, new: Url) -> Self {
-        self.remote = new;
-        self
-    }
-
-    pub fn client(mut self, new: HttpClient) -> Self {
-        self.client = new;
-        self
-    }
-}
-
 /// 模型配置
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Model {
@@ -335,18 +316,6 @@ pub struct Model {
     pub category: String,
     /// 客户端配置
     pub client: HttpClient,
-}
-
-impl Model {
-    pub fn update_category(mut self, new: String) -> Self {
-        self.category = new;
-        self
-    }
-
-    pub fn update_client(mut self, new: HttpClient) -> Self {
-        self.client = new;
-        self
-    }
 }
 
 /// HTTP 客户端配置
@@ -482,7 +451,7 @@ impl HttpClient {
         }
     }
 
-    pub fn build_chunk_timout(&self) -> Option<u64> {
+    pub fn build_chunk_timeout(&self) -> Option<u64> {
         self.chunk_timeout
     }
 }
