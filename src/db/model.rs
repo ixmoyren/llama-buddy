@@ -1,14 +1,18 @@
 use http_extra::sha256::digest;
 use rusqlite::{Connection, Transaction};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    collections::HashMap,
+    time::{SystemTime, UNIX_EPOCH},
+};
 use tracing::{error, info};
 use uuid::Uuid;
 
 const INSERT_INTO_MODEL_INFO: &str = r#"
-insert into model_info (id, title, href, introduction, pull_count, tag_count, summary, readme, updated_time, updated_at)
-values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+insert into model_info (id, title, href, raw_digest, introduction, pull_count, tag_count, summary, readme, updated_time, updated_at)
+values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
 on conflict (title, href) do update set title        = excluded.title,
                                         href         = excluded.href,
+                                        raw_digest   = excluded.raw_digest,
                                         introduction = excluded.introduction,
                                         pull_count   = excluded.pull_count,
                                         tag_count    = excluded.tag_count,
@@ -28,14 +32,17 @@ on conflict (href) do update set href       = excluded.href,
 const INSERT_INTO_MODEL: &str = r#"
 insert into model (id, name, href, size, context, input, hash, model_id, updated_at)
 values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
-on conflict (id) do update set name       = excluded.name,
-                               href       = excluded.href,
-                               size       = excluded.size,
-                               context    = excluded.context,
-                               input      = excluded.input,
-                               hash       = excluded.hash,
-                               model_id   = excluded.model_id,
-                               updated_at = strftime('%s', 'now');"#;
+on conflict (name) do update set name       = excluded.name,
+                                 href       = excluded.href,
+                                 size       = excluded.size,
+                                 context    = excluded.context,
+                                 input      = excluded.input,
+                                 hash       = excluded.hash,
+                                 updated_at = strftime('%s', 'now');"#;
+
+const QUERY_MODEL_TITLE_AND_RAW_DIGEST: &str = r#"
+select title, raw_digest from model_info;
+"#;
 
 // 插入 model 信息
 #[derive(Eq, PartialEq, Clone, Default, Debug)]
@@ -44,6 +51,8 @@ pub(crate) struct ModelInfo {
     pub(crate) title: String,
     // 获取这个模型详细介绍的 url
     pub(crate) href: String,
+    // 原始数据的摘要
+    pub(crate) raw_digest: String,
     // 模型简介
     pub(crate) introduction: String,
     // 拉取的数量
@@ -92,6 +101,23 @@ pub fn save_library_to_library_raw_data(conn: &Connection, html: String) -> anyh
     Ok(true)
 }
 
+pub fn query_model_title_and_model_info(
+    conn: &Connection,
+) -> anyhow::Result<HashMap<String, String>> {
+    let mut map = HashMap::<String, String>::new();
+    let mut statement = conn.prepare(QUERY_MODEL_TITLE_AND_RAW_DIGEST)?;
+    let rows = statement.query_map([], |row| {
+        let title = row.get::<_, String>(0)?;
+        let raw_digest = row.get::<_, String>(1)?;
+        Ok((title, raw_digest))
+    })?;
+    for row in rows {
+        let (title, raw_digest) = row?;
+        map.insert(title, raw_digest);
+    }
+    Ok(map)
+}
+
 pub fn insert_model_info(conn: &mut Connection, info: ModelInfo) -> anyhow::Result<bool> {
     // 开启一个事务
     let tx = conn.transaction()?;
@@ -103,6 +129,7 @@ pub fn insert_model_info(conn: &mut Connection, info: ModelInfo) -> anyhow::Resu
             &model_id,
             &info.title,
             &info.href,
+            &info.raw_digest,
             &info.introduction,
             &info.pull_count,
             &info.tag_count,

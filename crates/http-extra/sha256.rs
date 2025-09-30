@@ -24,7 +24,7 @@ pub fn digest(data: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::checksum;
+    use super::{checksum, digest};
     use std::io::Write;
 
     #[test]
@@ -41,6 +41,11 @@ mod tests {
                 "dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f"
             )
             .unwrap()
-        )
+        );
+        let hello = b"";
+        assert_eq!(
+            "47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=",
+            digest(hello)
+        );
     }
 }

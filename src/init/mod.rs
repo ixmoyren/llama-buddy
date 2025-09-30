@@ -6,7 +6,8 @@ use crate::{
     config::{Config as LLamaBuddyConfig, Data, HttpClient as HttpClientConfig, Registry},
     db::{
         self, CompletedStatus, check_init_completed, check_insert_model_info_completed,
-        completed_init, insert_model_info, save_library_to_library_raw_data,
+        completed_init, insert_model_info, query_model_title_and_model_info,
+        save_library_to_library_raw_data,
     },
     init::model::{convert_to_model_infos, fetch_library_html, fetch_model_more_info},
 };
@@ -57,6 +58,7 @@ pub async fn init_local_registry(args: InitArgs) -> anyhow::Result<()> {
         return Ok(());
     }
     if !check_insert_model_info_completed(&conn)? {
+        let mut old_model_raw_digest_map = query_model_title_and_model_info(&conn)?;
         // 创建一个单生产者单消费者的 channel，用来传递 library_html
         let (library_html_sender, library_html_receiver) =
             tokio::sync::oneshot::channel::<String>();
@@ -80,6 +82,11 @@ pub async fn init_local_registry(args: InitArgs) -> anyhow::Result<()> {
                 .send(library_html)
                 .expect("send library html to channel failed!");
             for model_info in model_infos.iter_mut() {
+                if let Some(old_raw_digest) = old_model_raw_digest_map.get(&model_info.title) {
+                    if old_raw_digest == model_info.raw_digest.as_str() {
+                        continue;
+                    }
+                }
                 let (summary, readme, html_raw, model_tag_vec) =
                     fetch_model_more_info(&model_info, client.clone(), remote_registry.clone())
                         .await
@@ -110,9 +117,9 @@ pub async fn init_local_registry(args: InitArgs) -> anyhow::Result<()> {
                 }
             }
         });
-        let conn_two = Arc::clone(&conn);
+        let conn_one = Arc::clone(&conn);
         let receive_job_two = tokio::spawn(async move {
-            let mut conn = conn_two.lock().await;
+            let mut conn = conn_one.lock().await;
             let mut all_success = true;
             while let Some(model) = model_info_receiver.recv().await {
                 if let Ok(is_success) = insert_model_info(&mut conn, model)

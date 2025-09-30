@@ -36,6 +36,7 @@ create table if not exists model_info
     id           blob primary key,
     title        text not null,
     href         text not null,
+    raw_digest   text,
     introduction text,
     pull_count   text,
     tag_count    text,

@@ -1,5 +1,6 @@
 use crate::db::{Model, ModelInfo};
 use anyhow::anyhow;
+use http_extra::sha256::digest;
 use reqwest::Client;
 use scraper::{ElementRef, Html, Selector};
 use std::collections::VecDeque;
@@ -120,6 +121,12 @@ pub(crate) fn convert_to_model_infos(html: impl AsRef<str>) -> anyhow::Result<Ve
     let mut models = VecDeque::<ModelInfo>::new();
 
     for el in html.select(&li_selector) {
+        let el_html = el.html();
+        let raw_digest = if el_html == "" {
+            "".to_owned()
+        } else {
+            digest(el.html().as_bytes())
+        };
         let href = if let Some(href) = el.attr("href") {
             href.to_owned()
         } else {
@@ -143,6 +150,7 @@ pub(crate) fn convert_to_model_infos(html: impl AsRef<str>) -> anyhow::Result<Ve
         let model_info = ModelInfo {
             title: title.to_owned(),
             href,
+            raw_digest,
             introduction,
             pull_count,
             tag_count,
