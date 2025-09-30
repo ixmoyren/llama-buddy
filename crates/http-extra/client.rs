@@ -1,17 +1,17 @@
 use crate::{
-    download::{Download, DownloadParam, DownloadStatus, DownloadSummary},
     HttpExtraError,
+    download::{Download, DownloadParam, DownloadStatus, DownloadSummary},
 };
 use reqwest::{
-    header::{HeaderMap, ACCEPT_RANGES, CONTENT_LENGTH, RANGE}, Client,
-    Url,
+    Client, Url,
+    header::{ACCEPT_RANGES, CONTENT_LENGTH, HeaderMap, RANGE},
 };
 use std::path::{Path, PathBuf};
 
 use tokio::{
     fs::File,
     io::AsyncWriteExt,
-    time::{timeout, Duration},
+    time::{Duration, timeout},
 };
 use tracing::{debug, error};
 
@@ -219,7 +219,7 @@ mod test {
         let url = Url::from_str("https://www.7-zip.org/a/7z2409-linux-x64.tar.xz").unwrap();
         let filename = "7z2409-linux-x64.tar.gz";
         let file_path = dir.path().join(filename);
-        let download_param = DownloadParam::try_new(url, filename, dir.into_path()).unwrap();
+        let download_param = DownloadParam::try_new(url, filename, dir.keep()).unwrap();
         let summary = CLIENT.fetch_file(download_param).await.unwrap();
         let file = tokio::fs::OpenOptions::new()
             .read(true)
