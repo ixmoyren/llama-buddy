@@ -27,6 +27,7 @@ android-shared-stdcxx = ["llama-cpp-sys/android-shared-stdcxx"]
 
 [dev-dependencies]
 anyhow = { workspace = true }
+snafu = { workspace = true }
 clap = { workspace = true }
 llama-cpp = { path = ".", features = ["cuda"], default-features = false }
 rustyline = { workspace = true }

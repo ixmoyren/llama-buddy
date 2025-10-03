@@ -1,4 +1,3 @@
-use anyhow::Context;
 use clap::Parser;
 use llama_cpp::{
     batch::Batch,
@@ -15,6 +14,7 @@ use rustyline::{
     hint::HistoryHinter,
     validate::MatchingBracketValidator,
 };
+use snafu::{OptionExt, ResultExt, Whatever};
 use std::{
     borrow::{
         Cow,
@@ -48,7 +48,7 @@ struct Cli {
     layer: i32,
 }
 
-fn main() -> anyhow::Result<()> {
+fn main() -> Result<(), Whatever> {
     let Cli {
         model: mode_path,
         text: text_context,
@@ -67,7 +67,7 @@ fn main() -> anyhow::Result<()> {
     // 从文件中加载模型
     let model = runtime
         .load_model_from_file(mode_path, &model_params)
-        .context("Failed to load model from the path")?;
+        .with_whatever_context(|_| "Failed to load model from the path")?;
 
     // 获取模型的词汇表
     let vocab = model.vocab();
@@ -77,7 +77,9 @@ fn main() -> anyhow::Result<()> {
         .with_n_batch(text_context);
 
     // 通过模型和上下文参数，初始化上下文
-    let mut context = runtime.new_context(&model, context_params)?;
+    let mut context = runtime
+        .new_context(&model, context_params)
+        .with_whatever_context(|_| "Failed to create a model context")?;
 
     // 设置采样器
     let min_p_sampler = Sampler::init_from_min_p(0.05_f32, 1);
@@ -100,7 +102,8 @@ fn main() -> anyhow::Result<()> {
         validator: MatchingBracketValidator::new(),
     };
 
-    let mut rustyline = rustyline::Editor::with_config(rustyline_config)?;
+    let mut rustyline = rustyline::Editor::with_config(rustyline_config)
+        .with_whatever_context(|_| "Failed to create a line editor")?;
     rustyline.set_helper(Some(rustyline_helper));
     rustyline.bind_sequence(KeyEvent::alt('n'), Cmd::HistorySearchBackward);
     rustyline.bind_sequence(KeyEvent::alt('p'), Cmd::HistorySearchForward);
@@ -111,22 +114,31 @@ fn main() -> anyhow::Result<()> {
     let mut count = 1;
     let mut messages = Vec::<Message>::new();
     // 获取模板
-    let template = model.chat_template(None)?;
+    let template = model
+        .chat_template(None)
+        .with_whatever_context(|_| "Failed to get a chat template from model")?;
     loop {
         let prompt = format!("{count}>> ");
-        rustyline.helper_mut().context("No helper!")?.colored_prompt =
-            format!("\x1b[1;32m{prompt}\x1b[0m");
+        rustyline.helper_mut().unwrap().colored_prompt = format!("\x1b[1;32m{prompt}\x1b[0m");
         let readline = rustyline.readline(&prompt);
         match readline {
             Ok(line) => {
-                rustyline.add_history_entry(line.as_str())?;
-                let message = Message::try_new("user", line)?;
+                rustyline
+                    .add_history_entry(line.as_str())
+                    .with_whatever_context(|_| "Failed to add history entry to line editor")?;
+                let message = Message::try_new("user", line)
+                    .with_whatever_context(|_| "Failed to create new message")?;
                 messages.push(message);
-                let prompt = model.apply_chat_template(&template, messages.as_slice(), true)?;
+                let prompt = model
+                    .apply_chat_template(&template, messages.as_slice(), true)
+                    .with_whatever_context(|_| "Failed to apply chat template to model")?;
                 let n_ctx_used = context.kv_cache_seq_pos_max(0) + 1;
                 let is_first = n_ctx_used == 0;
-                let tokens = vocab.tokenize(prompt, is_first, true)?;
-                let mut batch = Batch::get_one(&tokens)?;
+                let tokens = vocab
+                    .tokenize(prompt, is_first, true)
+                    .with_whatever_context(|_| "Failed to get tokens from vocab")?;
+                let mut batch = Batch::get_one(&tokens)
+                    .with_whatever_context(|_| "Failed to create a new batch by tokens")?;
                 let mut response = String::new();
                 loop {
                     let n_ctx = context.n_ctx();
@@ -134,22 +146,34 @@ fn main() -> anyhow::Result<()> {
                         eprintln!("context size exceeded!");
                         exit(0);
                     }
-                    context.decode(&mut batch)?;
+                    context
+                        .decode(&mut batch)
+                        .with_whatever_context(|_| "Failed to decode token")?;
                     let new_token = sampler.sample(&context, -1);
                     if vocab.is_eog_token(new_token) {
                         break;
                     }
-                    let piece = vocab.token_to_piece(&new_token, 0, true)?;
+                    let piece = vocab
+                        .token_to_piece(&new_token, 0, true)
+                        .with_whatever_context(|_| "Failed to get new piece from token")?;
                     response += &piece;
                     print!("{piece}");
                     // print! 不会自动刷新缓冲区，要确保消息立即显示在控制台上，需要手动刷新
-                    stdout().flush()?;
-                    batch = Batch::get_one(&[new_token])?;
+                    stdout()
+                        .flush()
+                        .with_whatever_context(|_| "Failed to flush to stdout")?;
+                    batch = Batch::get_one(&[new_token])
+                        .with_whatever_context(|_| "Failed to create a new batch by new token")?;
                 }
-                let message = Message::try_new("assistant", response)?;
+                let message = Message::try_new("assistant", response)
+                    .with_whatever_context(|_| "Failed to create new message")?;
                 messages.push(message);
-                model.apply_chat_template(&template, messages.as_slice(), false)?;
-                stdout().flush()?;
+                model
+                    .apply_chat_template(&template, messages.as_slice(), false)
+                    .with_whatever_context(|_| "Failed to apply chat template")?;
+                stdout()
+                    .flush()
+                    .with_whatever_context(|_| "Failed to flush to stdout")?;
             }
             Err(ReadlineError::Interrupted) => {
                 println!("Interrupted");

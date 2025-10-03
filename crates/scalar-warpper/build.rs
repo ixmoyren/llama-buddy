@@ -8,7 +8,9 @@ fn main() {
     // 监听可能变化的文件，当文件变化则重新构建
     println!("cargo:rerun-if-changed=build.rs");
     // 如果静态文件所在的目录不存在，那么直接安装
-    let static_dir = std::env::current_dir().unwrap().join("static");
+    let static_dir = std::env::current_dir()
+        .expect("Failed to get the current directory")
+        .join("static");
     if !static_dir.exists() {
         println!("cargo:warning=The static dir of scalar does not exist.");
         install_and_compress();
@@ -37,10 +39,13 @@ fn main() {
 }
 
 fn get_scalar_version_from_package_json() -> Option<String> {
-    let package_json = std::env::current_dir().unwrap().join("package.json");
-    let package_json_file = File::open(package_json).unwrap();
+    let package_json = std::env::current_dir()
+        .expect("Failed to get the current directory")
+        .join("package.json");
+    let package_json_file = File::open(package_json).expect("Failed to open package.json");
     let reader = BufReader::new(package_json_file);
-    let json = serde_json::from_reader::<_, serde_json::Value>(reader).unwrap();
+    let json = serde_json::from_reader::<_, serde_json::Value>(reader)
+        .expect("Failed to parse package.json");
     if let Some(dev_dependencies) = json.get("devDependencies")
         && let Some(scalar) = dev_dependencies.get("@scalar/api-reference")
         && let Some(version) = scalar.as_str()
