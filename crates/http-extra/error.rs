@@ -1,24 +1,27 @@
-use thiserror::Error;
-use tokio::time::error::Elapsed;
+use snafu::prelude::*;
 
-#[derive(Debug, Error)]
-pub enum HttpExtraError {
-    #[error(transparent)]
-    Dirs(#[from] sys_extra::dir::DirsError),
-    #[error(transparent)]
-    Io(#[from] std::io::Error),
-    #[error("There is no default download directory.")]
-    NoDownloadDir,
-    #[error(transparent)]
-    InvalidHeaderValue(#[from] reqwest::header::InvalidHeaderValue),
-    #[error("{0}")]
-    InvalidUrl(String),
-    #[error(transparent)]
-    Reqwest(#[from] reqwest::Error),
-    #[error("The path to save the file is not a directory.")]
-    PathNotDirectory,
-    #[error(transparent)]
-    Elapsed(#[from] Elapsed),
-    #[error(transparent)]
-    HexDecode(#[from] faster_hex::Error),
+#[derive(Debug, Snafu)]
+#[snafu(visibility(pub(crate)))]
+pub enum Error {
+    #[snafu(display("Failed to fetch head"))]
+    FetchHead { source: reqwest::Error },
+    #[snafu(display("Failed to fetch resources"))]
+    FetchResources { source: reqwest::Error },
+    #[snafu(display("Failed to get default home directory"))]
+    GetDefaultHomeDirectory { source: sys_extra::dir::Error },
+    #[snafu(display("Failed to set timeout"))]
+    SetTimeout { source: tokio::time::error::Elapsed },
+    #[snafu(display("Failed to get chunk"))]
+    GetChunk { source: reqwest::Error },
+    #[snafu(display("{message}"))]
+    IoOperation {
+        message: String,
+        source: std::io::Error,
+    },
+    #[snafu(whatever, display("{message}"))]
+    GenericError {
+        message: String,
+        #[snafu(source(from(Box<dyn std::error::Error>, Some)))]
+        source: Option<Box<dyn std::error::Error>>,
+    },
 }

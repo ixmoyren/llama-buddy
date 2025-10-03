@@ -1,5 +1,6 @@
-use crate::error::HttpExtraError;
+use crate::{GetDefaultHomeDirectorySnafu, IoOperationSnafu, Result};
 use reqwest::Url;
+use snafu::{OptionExt, ResultExt, ensure_whatever};
 use std::path::{Path, PathBuf};
 use sys_extra::dir::UserDirs;
 
@@ -8,13 +9,13 @@ pub trait Download {
     async fn get_content_length_and_accept_ranges(
         &self,
         url: Url,
-    ) -> Result<(Option<u64>, Option<String>), HttpExtraError>;
+    ) -> Result<(Option<u64>, Option<String>)>;
 
     /// 获取文件
-    async fn fetch_file(&self, download: DownloadParam) -> Result<DownloadSummary, HttpExtraError>;
+    async fn fetch_file(&self, download: DownloadParam) -> Result<DownloadSummary>;
 }
 
-pub async fn spawn<D>(client: D, param: DownloadParam) -> Result<DownloadSummary, HttpExtraError>
+pub async fn spawn<D>(client: D, param: DownloadParam) -> Result<DownloadSummary>
 where
     D: Download,
 {
@@ -54,12 +55,19 @@ impl DownloadParam {
         url: Url,
         file_name: impl AsRef<str>,
         save_to: impl AsRef<Path>,
-    ) -> Result<Self, HttpExtraError> {
+    ) -> Result<Self> {
         let save_to = save_to.as_ref();
         // 保存文件的路径存在，但是不是目录，那么直接返回错误
-        if save_to.try_exists()? && !save_to.is_dir() {
-            return Err(HttpExtraError::PathNotDirectory);
-        }
+        ensure_whatever!(
+            save_to.try_exists().context(IoOperationSnafu {
+                message: format!(
+                    "Didn't determine whether this path({}) exists",
+                    save_to.display()
+                ),
+            })? && save_to.is_dir(),
+            "The {} is not a directory",
+            save_to.display()
+        );
         Ok(Self {
             fetch_from: url,
             file_name: file_name.as_ref().to_owned(),
@@ -68,14 +76,12 @@ impl DownloadParam {
         })
     }
 
-    pub fn try_new_default_download_dir(
-        url: Url,
-        file_name: impl AsRef<str>,
-    ) -> Result<Self, HttpExtraError> {
+    pub fn try_new_default_download_dir(url: Url, file_name: impl AsRef<str>) -> Result<Self> {
         let file_name = file_name.as_ref().to_owned();
-        let save_to = UserDirs::new()?
+        let save_to = UserDirs::new()
+            .context(GetDefaultHomeDirectorySnafu)?
             .download_dir()
-            .ok_or(HttpExtraError::NoDownloadDir)?
+            .whatever_context("Didn't get default download directory, the result is none")?
             .to_owned();
         Self::try_new(url, file_name, save_to)
     }
@@ -87,13 +93,11 @@ impl DownloadParam {
 }
 
 impl TryFrom<Url> for DownloadParam {
-    type Error = HttpExtraError;
+    type Error = crate::Error;
     fn try_from(url: Url) -> Result<Self, Self::Error> {
         let filename = url
             .path_segments()
-            .ok_or_else(|| {
-                HttpExtraError::InvalidUrl(format!("The URL({url}) doesn't contain a valid path"))
-            })?
+            .whatever_context(format!("The URL({url}) doesn't contain a valid path"))?
             .next_back()
             .map(|file_name| {
                 // 判断 url 最后一个部分的格式，尝试解码
@@ -120,17 +124,18 @@ impl TryFrom<Url> for DownloadParam {
                 }
                 vec.join("_")
             })
-            .ok_or(HttpExtraError::InvalidUrl(format!(
-                "The URL({url}) doesn't contain a valid path, file name is null"
-            )))?;
+            .whatever_context(format!(
+                "The URL({url}) doesn't contain a valid path, file name is empty"
+            ))?;
         DownloadParam::try_new_default_download_dir(url, filename)
     }
 }
 
 impl TryFrom<&str> for DownloadParam {
-    type Error = HttpExtraError;
+    type Error = crate::Error;
     fn try_from(url: &str) -> Result<Self, Self::Error> {
-        let url = Url::parse(url).map_err(|_| HttpExtraError::InvalidUrl(url.to_string()))?;
+        let url = Url::parse(url)
+            .whatever_context(format!("This string({url}) cannot be converted to a URL"))?;
         DownloadParam::try_from(url)
     }
 }

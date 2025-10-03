@@ -1,5 +1,7 @@
+use snafu::prelude::*;
 use std::{env, env::VarError, ops::Deref};
-use thiserror::Error;
+
+type Result<T> = std::result::Result<T, Error>;
 
 /// 目标三元组，默认 x86_64_unknown_linux_gnu
 /// https://doc.rust-lang.org/rustc/platform-support.html
@@ -48,9 +50,9 @@ impl TargetTriple {
     }
 
     /// 从环境变量中获取到目标三元组
-    pub fn parse_from_env() -> Result<Self, TargetError> {
+    pub fn parse_from_env() -> Result<Self> {
         // target 样例 x86_64-unknown-linux-gnu
-        let target = env::var("TARGET")?;
+        let target = env::var("TARGET").context(NoEnvVarSnafu)?;
         let target = Self::parse_from_str(target);
         Ok(target)
     }
@@ -152,8 +154,8 @@ impl TargetTriple {
     }
 }
 
-#[derive(Debug, Eq, PartialEq, Error)]
-pub enum TargetError {
-    #[error("Failed to get env var target!")]
-    NoEnvVar(#[from] VarError),
+#[derive(Debug, Snafu)]
+pub enum Error {
+    #[snafu(display("Failed to get env var target!"))]
+    NoEnvVar { source: VarError },
 }

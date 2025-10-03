@@ -16,8 +16,10 @@ mod linux;
 #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "ios")))]
 use linux as dirs;
 
+use snafu::prelude::*;
 use std::path::{Path, PathBuf};
-use thiserror::Error;
+
+type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Clone, Debug)]
 pub struct BaseDirs {
@@ -34,8 +36,8 @@ pub struct BaseDirs {
 }
 
 impl BaseDirs {
-    pub fn new() -> Result<Self, DirsError> {
-        dirs::base_dirs().ok_or(DirsError::NoHomeDir)
+    pub fn new() -> Result<Self> {
+        dirs::base_dirs().context(NoHomeDirSnafu)
     }
 
     pub fn home_dir(&self) -> &Path {
@@ -94,8 +96,8 @@ pub struct UserDirs {
 }
 
 impl UserDirs {
-    pub fn new() -> Result<Self, DirsError> {
-        dirs::user_dirs().ok_or(DirsError::NoHomeDir)
+    pub fn new() -> Result<Self> {
+        dirs::user_dirs().context(NoHomeDirSnafu)
     }
 
     pub fn home_dir(&self) -> &Path {
@@ -139,8 +141,8 @@ impl UserDirs {
     }
 }
 
-#[derive(Debug, Eq, PartialEq, Error)]
-pub enum DirsError {
-    #[error("The Home directory is not defined")]
+#[derive(Debug, Snafu)]
+pub enum Error {
+    #[snafu(display("The Home directory is not defined"))]
     NoHomeDir,
 }
