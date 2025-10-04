@@ -119,7 +119,10 @@ fn main() -> Result<(), Whatever> {
         .with_whatever_context(|_| "Failed to get a chat template from model")?;
     loop {
         let prompt = format!("{count}>> ");
-        rustyline.helper_mut().unwrap().colored_prompt = format!("\x1b[1;32m{prompt}\x1b[0m");
+        rustyline
+            .helper_mut()
+            .with_whatever_context(|| "Line editor no helper")?
+            .colored_prompt = format!("\x1b[1;32m{prompt}\x1b[0m");
         let readline = rustyline.readline(&prompt);
         match readline {
             Ok(line) => {
