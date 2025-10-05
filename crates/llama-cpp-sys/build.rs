@@ -114,8 +114,7 @@ fn main() {
             cmake_config.cflag("-march=i686");
             cmake_config.cxxflag("-march=i686");
         } else {
-            println!("cargo:error=Unsupported Android target {target:?}");
-            return;
+            panic!("cargo:error=Unsupported Android target {target:?}");
         }
 
         // 不将 LLAMA.CPP 打包成一个单一文件
@@ -267,9 +266,9 @@ fn extract_lib_names(out_dir: &Path, target: &TargetTriple) -> Vec<String> {
                     let lib_name = if stem_str.starts_with("lib") {
                         stem_str.strip_prefix("lib").unwrap_or(stem_str)
                     } else {
-                        let extension = path.extension().expect(
-                            format!("Failed to get lib file path extension, {path:?}").as_str(),
-                        );
+                        let extension = path.extension().unwrap_or_else(|| {
+                            panic!("Failed to get lib file path extension, {path:?}")
+                        });
                         if extension == path_extension_a
                             && let Some(parent) = path.parent()
                         {
