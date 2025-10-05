@@ -1,4 +1,3 @@
-mod batch;
 mod cache;
 mod chat;
 mod context;
@@ -8,7 +7,6 @@ mod runtime;
 mod token;
 mod vocabulary;
 
-pub use batch::BatchAddError;
 pub use cache::KvCacheConversionError;
 pub use chat::{ChatMessageError, ChatTemplateError};
 pub use context::{DecodeError, EmbeddingsError, EncodeError, LlamaContextLoadError};
@@ -47,8 +45,6 @@ pub enum LLamaCppError {
     LlamaAdapterLoraInit(#[from] LlamaAdapterLoraInitError),
     #[error("{0}")]
     LlamaContextLoad(#[from] LlamaContextLoadError),
-    #[error("{0}")]
-    BatchAdd(#[from] BatchAddError),
     #[error("{0}")]
     ContextDecode(#[from] DecodeError),
     #[error("{0}")]

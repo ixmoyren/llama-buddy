@@ -1621,7 +1621,6 @@ dependencies = [
 name = "llama-cpp"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "clap",
  "enumflags2",
  "llama-cpp",

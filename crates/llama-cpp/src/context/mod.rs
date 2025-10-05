@@ -1,18 +1,17 @@
-mod cache;
 mod params;
 mod perf;
 
-pub use cache::*;
 pub use params::*;
 pub use perf::Perf;
 
 use crate::{
     batch::Batch,
-    error::{DecodeError, EncodeError},
+    error::{DecodeError, EncodeError, KvCacheConversionError},
 };
 use std::{
+    ffi::c_int,
     fmt::{Debug, Formatter},
-    num::NonZeroI32,
+    num::{NonZeroI32, NonZeroU8},
     ptr::NonNull,
 };
 
@@ -78,10 +77,7 @@ impl Context {
         let result = unsafe { llama_cpp_sys::llama_decode(self.raw.as_ptr(), batch.raw()) };
 
         match NonZeroI32::new(result) {
-            None => {
-                self.initialized_logits.clone_from(batch.logits_ref());
-                Ok(())
-            }
+            None => Ok(()),
             Some(error_code) => Err(error_code.into()),
         }
     }
@@ -90,12 +86,105 @@ impl Context {
         let result = unsafe { llama_cpp_sys::llama_encode(self.raw.as_ptr(), batch.raw()) };
 
         match NonZeroI32::new(result) {
-            None => {
-                self.initialized_logits.clone_from(batch.logits_ref());
-                Ok(())
-            }
+            None => Ok(()),
             Some(error_code) => Err(error_code.into()),
         }
+    }
+
+    pub fn copy_cache(&mut self, src: i32, dest: i32, size: i32) {
+        unsafe { llama_cpp_sys::llama_memory_seq_cp(self.memory_ptr(), src, dest, 0, size) }
+    }
+
+    pub fn copy_kv_cache_seq(
+        &mut self,
+        src: i32,
+        dest: i32,
+        p0: Option<u32>,
+        p1: Option<u32>,
+    ) -> Result<(), KvCacheConversionError> {
+        let p0 = p0
+            .map_or(Ok(-1), i32::try_from)
+            .map_err(KvCacheConversionError::P0TooLarge)?;
+        let p1 = p1
+            .map_or(Ok(-1), i32::try_from)
+            .map_err(KvCacheConversionError::P1TooLarge)?;
+        unsafe {
+            llama_cpp_sys::llama_memory_seq_cp(self.memory_ptr(), src, dest, p0, p1);
+        }
+        Ok(())
+    }
+
+    pub fn clear_kv_cache_seq(
+        &mut self,
+        src: Option<u32>,
+        p0: Option<u32>,
+        p1: Option<u32>,
+    ) -> Result<bool, KvCacheConversionError> {
+        let src = src
+            .map_or(Ok(-1), i32::try_from)
+            .map_err(KvCacheConversionError::SeqIdTooLarge)?;
+        let p0 = p0
+            .map_or(Ok(-1), i32::try_from)
+            .map_err(KvCacheConversionError::P0TooLarge)?;
+        let p1 = p1
+            .map_or(Ok(-1), i32::try_from)
+            .map_err(KvCacheConversionError::P1TooLarge)?;
+        Ok(unsafe { llama_cpp_sys::llama_memory_seq_rm(self.memory_ptr(), src, p0, p1) })
+    }
+
+    pub fn clear_kv_cache(&mut self, clear_buf: bool) {
+        unsafe { llama_cpp_sys::llama_memory_clear(self.memory_ptr(), clear_buf) }
+    }
+
+    pub fn kv_cache_seq_keep(&mut self, seq_id: i32) {
+        unsafe { llama_cpp_sys::llama_memory_seq_keep(self.memory_ptr(), seq_id) }
+    }
+
+    pub fn kv_cache_seq_add(
+        &mut self,
+        seq_id: i32,
+        p0: Option<u32>,
+        p1: Option<u32>,
+        delta: i32,
+    ) -> Result<(), KvCacheConversionError> {
+        let p0 = p0
+            .map_or(Ok(-1), i32::try_from)
+            .map_err(KvCacheConversionError::P0TooLarge)?;
+        let p1 = p1
+            .map_or(Ok(-1), i32::try_from)
+            .map_err(KvCacheConversionError::P1TooLarge)?;
+        unsafe {
+            llama_cpp_sys::llama_memory_seq_add(self.memory_ptr(), seq_id, p0, p1, delta);
+        }
+        Ok(())
+    }
+
+    pub fn kv_cache_seq_div(
+        &mut self,
+        seq_id: i32,
+        p0: Option<u32>,
+        p1: Option<u32>,
+        d: NonZeroU8,
+    ) -> Result<(), KvCacheConversionError> {
+        let p0 = p0
+            .map_or(Ok(-1), i32::try_from)
+            .map_err(KvCacheConversionError::P0TooLarge)?;
+        let p1 = p1
+            .map_or(Ok(-1), i32::try_from)
+            .map_err(KvCacheConversionError::P1TooLarge)?;
+        let d = c_int::from(d.get());
+        unsafe { llama_cpp_sys::llama_memory_seq_div(self.memory_ptr(), seq_id, p0, p1, d) }
+        Ok(())
+    }
+
+    #[must_use]
+    pub fn kv_cache_seq_pos_max(&self, seq_id: i32) -> i32 {
+        unsafe { llama_cpp_sys::llama_memory_seq_pos_max(self.memory_ptr(), seq_id) }
+    }
+
+    #[must_use]
+    pub fn kv_cache_seq_pos_min(&self, seq_id: i32) -> i32 {
+        unsafe { llama_cpp_sys::llama_memory_seq_pos_min(self.memory_ptr(), seq_id) }
     }
 
     /// Reset the timings for the context.

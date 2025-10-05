@@ -1,4 +1,5 @@
 use crate::error::GgmlNumaStrategyError;
+use std::{fmt, fmt::Formatter};
 
 /// `ggml_numa_strategy` 的包装器
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
@@ -9,6 +10,31 @@ pub enum Strategy {
     NUMACTL,
     MIRROR,
     COUNT,
+}
+
+impl fmt::Display for Strategy {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Strategy::DISABLED => {
+                write!(f, "GGML_NUMA_STRATEGY_DISABLED")
+            }
+            Strategy::DISTRIBUTE => {
+                write!(f, "GGML_NUMA_STRATEGY_DISTRIBUTE")
+            }
+            Strategy::ISOLATE => {
+                write!(f, "GGML_NUMA_STRATEGY_ISOLATE")
+            }
+            Strategy::NUMACTL => {
+                write!(f, "GGML_NUMA_STRATEGY_NUMACTL")
+            }
+            Strategy::MIRROR => {
+                write!(f, "GGML_NUMA_STRATEGY_MIRROR")
+            }
+            Strategy::COUNT => {
+                write!(f, "GGML_NUMA_STRATEGY_COUNT")
+            }
+        }
+    }
 }
 
 impl TryFrom<llama_cpp_sys::ggml_numa_strategy> for Strategy {

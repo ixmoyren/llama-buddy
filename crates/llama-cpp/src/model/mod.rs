@@ -472,7 +472,7 @@ impl DerefMut for Model {
 
 impl Drop for Model {
     fn drop(&mut self) {
-        unsafe { llama_cpp_sys::llama_free_model(self.raw.as_ptr()) }
+        unsafe { llama_cpp_sys::llama_model_free(self.raw.as_ptr()) }
     }
 }
 

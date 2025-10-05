@@ -25,6 +25,7 @@ static BACKEND_INITIALIZED: OnceLock<BackendInitializedType> = OnceLock::new();
 pub struct Runtime;
 
 impl Runtime {
+    /// 初始化 llama + ggml 后端
     #[tracing::instrument(level = "info")]
     pub fn init() -> Self {
         let _ = BACKEND_INITIALIZED.get_or_init(|| {
@@ -37,32 +38,7 @@ impl Runtime {
         Self
     }
 
-    #[tracing::instrument(level = "info")]
-    pub fn load_all() -> Self {
-        let _ = BACKEND_INITIALIZED.get_or_init(|| {
-            unsafe {
-                llama_cpp_sys::ggml_backend_load_all();
-            }
-            info!("Initialized llama.cpp backend (without numa).");
-            BackendInitializedType::LoadAll
-        });
-        Self
-    }
-
-    #[tracing::instrument(level = "info")]
-    pub fn load_all_from_path(path: PathBuf) -> Self {
-        let _ = BACKEND_INITIALIZED.get_or_init(|| {
-            let dir_path = path.clone().into_os_string().into_string().unwrap();
-            let dir_path = CString::new(dir_path).unwrap();
-            unsafe {
-                llama_cpp_sys::ggml_backend_load_all_from_path(dir_path.as_ptr());
-            }
-            info!("Initialized llama.cpp backend (without numa).");
-            BackendInitializedType::LoadAllFromPath(path)
-        });
-        Self
-    }
-
+    /// 使用 numa 选项提供不同优化程度的 llama + ggml 后端的初始化
     #[tracing::instrument(level = "info")]
     pub fn init_with_ggml_numa(strategy: Strategy) -> Self {
         let _ = BACKEND_INITIALIZED.get_or_init(|| {
@@ -76,7 +52,40 @@ impl Runtime {
         Self
     }
 
-    /// 是否支持 GPU
+    /// 从动态库（blas/cuda/metal/vulkan 等）中加载 ggml 后端
+    #[tracing::instrument(level = "info")]
+    pub fn load_all() -> Self {
+        let _ = BACKEND_INITIALIZED.get_or_init(|| {
+            unsafe {
+                llama_cpp_sys::ggml_backend_load_all();
+            }
+            info!("Initialized llama.cpp backend (without numa).");
+            BackendInitializedType::LoadAll
+        });
+        Self
+    }
+
+    /// 从提供的动态库目录中加载 ggml 后端
+    #[tracing::instrument(level = "info")]
+    pub fn load_all_from_path(path: impl AsRef<Path> + std::fmt::Debug) -> Self {
+        let _ = BACKEND_INITIALIZED.get_or_init(|| {
+            let path = path.as_ref();
+            debug_assert!(
+                path.exists() && path.is_dir(),
+                "{path:?} does not exist or not a dir"
+            );
+            let dir_path = path.as_os_str().as_encoded_bytes();
+            let dir_path = CString::new(dir_path).unwrap();
+            unsafe {
+                llama_cpp_sys::ggml_backend_load_all_from_path(dir_path.as_ptr());
+            }
+            info!("Initialized llama.cpp backend (without numa).");
+            BackendInitializedType::LoadAllFromPath(path.to_path_buf())
+        });
+        Self
+    }
+
+    /// 是否支持 GPU 离线卸载
     pub fn support_gpu_offload(&self) -> bool {
         unsafe { llama_cpp_sys::llama_supports_gpu_offload() }
     }
@@ -105,6 +114,9 @@ impl Runtime {
         }
     }
 
+    /// 从模型文件中加载模型
+    ///
+    /// 如果模型文件被分割成多个文件，默认情况下，这些模型文件的命名模式必须符合 `<name>-%05d-of-%05d.gguf`
     #[tracing::instrument(skip_all, fields(params))]
     pub fn load_model_from_file(
         &self,
@@ -112,14 +124,43 @@ impl Runtime {
         params: &ModelParams,
     ) -> Result<Model, LlamaModelLoadError> {
         let path = path.as_ref();
-        debug_assert!(Path::new(path).exists(), "{path:?} does not exist");
-        let path = path
-            .to_str()
-            .ok_or(LlamaModelLoadError::PathToStr(path.to_owned()))?;
-
-        let cstr = CString::new(path)?;
+        debug_assert!(
+            path.exists() && path.is_file(),
+            "{path:?} does not exist or not a file"
+        );
+        let path = path.as_os_str().as_encoded_bytes();
+        let path = CString::new(path)?;
         let llama_model =
-            unsafe { llama_cpp_sys::llama_load_model_from_file(cstr.as_ptr(), params.raw()) };
+            unsafe { llama_cpp_sys::llama_model_load_from_file(path.as_ptr(), params.raw()) };
+
+        let model = NonNull::new(llama_model).ok_or(LlamaModelLoadError::NullReturn)?;
+
+        tracing::debug!(?path, "Loaded model");
+        Ok(model.into())
+    }
+
+    /// 从多个模型文件中加载模型
+    ///
+    /// 模型文件的名称没有特定要求，但是模型文件的路径传入的顺序就是加载顺序，这个顺序必须保证正确
+    #[tracing::instrument(skip_all, fields(params))]
+    pub fn load_model_from_multiple_file(
+        &self,
+        path: Vec<PathBuf>,
+        params: &ModelParams,
+    ) -> Result<Model, LlamaModelLoadError> {
+        debug_assert!(path.is_empty(), "path is empty");
+        let mut path_ptrs = path
+            .iter()
+            .map(|p| {
+                let path = p.as_os_str().as_encoded_bytes();
+                let path = CString::new(path).unwrap();
+                path.as_ptr()
+            })
+            .collect::<Vec<*const c_char>>();
+        let len = path.len();
+        let llama_model = unsafe {
+            llama_cpp_sys::llama_model_load_from_splits(path_ptrs.as_mut_ptr(), len, params.raw())
+        };
 
         let model = NonNull::new(llama_model).ok_or(LlamaModelLoadError::NullReturn)?;
 
