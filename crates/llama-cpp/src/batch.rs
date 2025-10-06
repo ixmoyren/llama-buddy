@@ -29,7 +29,7 @@ pub struct Batch {
 #[derive(Debug, Snafu)]
 #[snafu(visibility(pub(crate)))]
 pub enum BatchError {
-    #[snafu(display("Empty token slice"), visibility(pub(crate)))]
+    #[snafu(display("Empty token slice"))]
     EmptyTokenSlice,
     #[snafu(display("Allocated space insufficient, quantity is {size}"))]
     AllocatedSpaceInsufficient { size: i32 },

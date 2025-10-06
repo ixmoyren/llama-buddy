@@ -1,4 +1,4 @@
-use crate::error::GgmlNumaStrategyError;
+use snafu::prelude::*;
 use std::{fmt, fmt::Formatter};
 
 /// `ggml_numa_strategy` 的包装器
@@ -10,6 +10,15 @@ pub enum Strategy {
     NUMACTL,
     MIRROR,
     COUNT,
+}
+
+#[derive(Debug, Snafu)]
+#[snafu(visibility(pub(crate)))]
+pub enum StrategyError {
+    #[snafu(display("Nonsupport ggml_numa_strategy: {from}"))]
+    NonsupportValue {
+        from: llama_cpp_sys::ggml_numa_strategy,
+    },
 }
 
 impl fmt::Display for Strategy {
@@ -38,7 +47,7 @@ impl fmt::Display for Strategy {
 }
 
 impl TryFrom<llama_cpp_sys::ggml_numa_strategy> for Strategy {
-    type Error = GgmlNumaStrategyError;
+    type Error = StrategyError;
 
     fn try_from(value: llama_cpp_sys::ggml_numa_strategy) -> Result<Self, Self::Error> {
         use Strategy::*;
@@ -49,7 +58,7 @@ impl TryFrom<llama_cpp_sys::ggml_numa_strategy> for Strategy {
             llama_cpp_sys::GGML_NUMA_STRATEGY_NUMACTL => Ok(NUMACTL),
             llama_cpp_sys::GGML_NUMA_STRATEGY_MIRROR => Ok(MIRROR),
             llama_cpp_sys::GGML_NUMA_STRATEGY_COUNT => Ok(COUNT),
-            strategy => Err(GgmlNumaStrategyError::NonsupportValue(strategy.to_string())),
+            strategy => Err(StrategyError::NonsupportValue { from: strategy }),
         }
     }
 }

@@ -1,6 +1,6 @@
 extern crate core;
 
-use crate::batch::BatchError;
+use crate::{batch::BatchError, ggml_numa::StrategyError as GgmlNumaStrategyError};
 use snafu::Snafu;
 
 pub mod batch;
@@ -20,6 +20,8 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub enum Error {
     #[snafu(transparent)]
     Batch { source: BatchError },
+    #[snafu(transparent)]
+    GgmlNuma { source: GgmlNumaStrategyError },
     #[snafu(whatever, display("{message}"))]
     GenericError {
         message: String,

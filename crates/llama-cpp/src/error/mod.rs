@@ -3,7 +3,6 @@ mod chat;
 mod context;
 mod lora;
 mod model;
-mod runtime;
 mod token;
 mod vocabulary;
 
@@ -14,7 +13,6 @@ pub use lora::{LlamaAdapterLoraInitError, LlamaAdapterLoraRemoveError, LlamaAdap
 pub use model::{
     ApplyChatTemplateError, LlamaModelLoadError, StringConversionError, TokenConversionError,
 };
-pub use runtime::GgmlNumaStrategyError;
 use thiserror::Error;
 pub use token::TokenTypeConversionError;
 pub use vocabulary::{
@@ -24,9 +22,6 @@ pub use vocabulary::{
 /// llama_cpp 全部的错误汇总
 #[derive(Debug, Eq, PartialEq, Error)]
 pub enum LLamaCppError {
-    /// 后端错误
-    #[error("{0}")]
-    GgmlNumaStrategy(#[from] GgmlNumaStrategyError),
     #[error("{0}")]
     ChatTemplate(#[from] ChatTemplateError),
     #[error("{0}")]
