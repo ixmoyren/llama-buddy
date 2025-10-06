@@ -1,17 +1,41 @@
-use crate::{
-    error::{DeTokenizeError, TokenToPieceError, TokenizeError, VocabularyTypeConversionError},
-    token::Token,
-};
+use crate::token::Token;
+use snafu::prelude::*;
 use std::{
     ffi::{CString, c_char},
+    num::TryFromIntError,
     ops::{Deref, DerefMut},
     ptr,
     ptr::{NonNull, slice_from_raw_parts},
 };
 
+const TOKEN_TEXT_MAX_LENGTH: usize = i32::MAX as usize;
+
 /// `llama_vocab` 的包装
 pub struct Vocabulary {
     raw: NonNull<llama_cpp_sys::llama_vocab>,
+}
+
+#[derive(Debug, Snafu)]
+#[snafu(visibility(pub(crate)))]
+pub enum VocabularyError {
+    #[snafu(display("The buffer is too small: {size}, when token to piece"))]
+    TokenToPieceBufTooSmall { size: i32 },
+    #[snafu(display("The text length({size}) exceeds the buffer"))]
+    TokenizeTextTooLong { size: usize },
+    #[snafu(display("The supplied bytes contain an internal 0 byte"))]
+    TokenizeCstrNul { source: std::ffi::NulError },
+    #[snafu(display("Token too many: {size}, when tokenize"))]
+    TokenizeTokenTooMany { size: i32 },
+    #[snafu(display(
+        "The number of tokens obtained after word segmentation is not equal to the pre-calculated value({value})"
+    ))]
+    TokenizeFailed { value: i32 },
+    #[snafu(display("The buffer is too small: {size}, when detokenize"))]
+    DetokenizeBufTooSmall { size: i32 },
+    #[snafu(display("Unknown token type: {value}"))]
+    UnknownTokenType { value: i32 },
+    #[snafu(display("Can't fit {from} to usize"))]
+    I32IntoUsize { from: i32, source: TryFromIntError },
 }
 
 impl Vocabulary {
@@ -56,7 +80,7 @@ impl Vocabulary {
         token: &Token,
         lstrip: i32,
         special: bool,
-    ) -> Result<String, TokenToPieceError> {
+    ) -> Result<String, VocabularyError> {
         // 提供一个初始缓冲区
         let mut buf_size = 256;
         let mut buf = vec![0_u8; buf_size];
@@ -77,7 +101,8 @@ impl Vocabulary {
 
         // 缓冲区太小，调整大小重试
         if piece_len < 0 {
-            buf_size = usize::try_from(-piece_len)?;
+            buf_size =
+                usize::try_from(-piece_len).context(I32IntoUsizeSnafu { from: -piece_len })?;
             buf = vec![0u8; buf_size];
             piece_len = unsafe {
                 llama_cpp_sys::llama_token_to_piece(
@@ -89,14 +114,13 @@ impl Vocabulary {
                     special,
                 )
             };
-            if piece_len < 0 {
-                return Err(TokenToPieceError::BufferTooSmall(piece_len));
-            }
+            ensure!(
+                piece_len >= 0,
+                TokenToPieceBufTooSmallSnafu { size: piece_len }
+            );
         }
 
-        if piece_len == 0 {
-            return Err(TokenToPieceError::UnknownTokenType);
-        }
+        ensure!(piece_len > 0, UnknownTokenTypeSnafu { value: piece_len });
 
         unsafe {
             buf.set_len(piece_len as usize);
@@ -110,17 +134,18 @@ impl Vocabulary {
         text: impl AsRef<str>,
         add_special: bool,
         parse_special: bool,
-    ) -> Result<Vec<Token>, TokenizeError> {
+    ) -> Result<Vec<Token>, VocabularyError> {
         let text = text.as_ref();
         // 检查文本长度
         let text_len = text.len();
-        if text_len > i32::MAX as usize {
-            return Err(TokenizeError::TextTooLong(text_len));
-        }
+        ensure!(
+            text_len <= TOKEN_TEXT_MAX_LENGTH,
+            TokenizeTextTooLongSnafu { size: text_len }
+        );
 
         let vocab = self.raw_mut();
 
-        let text = CString::new(text)?;
+        let text = CString::new(text).context(TokenizeCstrNulSnafu)?;
 
         // 通过 token 为 null 和 n_tokens_max 为 0, 可以计算 text 中令牌的数量
         let token_len = unsafe {
@@ -135,9 +160,7 @@ impl Vocabulary {
             )
         };
 
-        if token_len <= 0 {
-            return Err(TokenizeError::TokenTooMany(token_len));
-        }
+        ensure!(token_len > 0, TokenizeTokenTooManySnafu { size: token_len });
 
         let mut tokens = Vec::<llama_cpp_sys::llama_token>::with_capacity(token_len as usize);
 
@@ -152,11 +175,13 @@ impl Vocabulary {
                 parse_special,
             );
 
-            if token_len != tokenize_len {
-                return Err(TokenizeError::TokenizeFailed(
-                    "The number of tokens obtained after word segmentation is not equal to the pre-calculated value".to_owned(),
-                ));
-            }
+            ensure!(
+                token_len == tokenize_len,
+                TokenizeFailedSnafu {
+                    value: tokenize_len
+                }
+            );
+
             tokens.set_len(tokenize_len as usize);
         }
 
@@ -168,7 +193,7 @@ impl Vocabulary {
         tokens: &[Token],
         remove_special: bool,
         unparse_special: bool,
-    ) -> Result<String, DeTokenizeError> {
+    ) -> Result<String, VocabularyError> {
         let vocab = self.raw_mut();
         let token_len = tokens.len();
         let tokens = slice_from_raw_parts(
@@ -194,7 +219,9 @@ impl Vocabulary {
 
         // 缓冲区太小，调整大小重试
         if de_tokenize_len < 0 {
-            buf_size = usize::try_from(-de_tokenize_len)?;
+            buf_size = usize::try_from(-de_tokenize_len).context(I32IntoUsizeSnafu {
+                from: -de_tokenize_len,
+            })?;
             buf = vec![0_u8; buf_size];
             de_tokenize_len = unsafe {
                 llama_cpp_sys::llama_detokenize(
@@ -207,14 +234,20 @@ impl Vocabulary {
                     unparse_special,
                 )
             };
-            if de_tokenize_len < 0 {
-                return Err(DeTokenizeError::BufferTooSmall(de_tokenize_len));
-            }
+            ensure!(
+                de_tokenize_len >= 0,
+                DetokenizeBufTooSmallSnafu {
+                    size: de_tokenize_len
+                }
+            )
         }
 
-        if de_tokenize_len == 0 {
-            return Err(DeTokenizeError::UnknownTokenType);
-        }
+        ensure!(
+            de_tokenize_len > 0,
+            UnknownTokenTypeSnafu {
+                value: de_tokenize_len
+            }
+        );
 
         unsafe {
             buf.set_len(de_tokenize_len as usize);
@@ -269,20 +302,37 @@ impl DerefMut for Vocabulary {
     }
 }
 
-/// a rusty equivalent of `llama_vocab_type`
+/// `llama_vocab_type`
 #[repr(u32)]
 #[derive(Debug, Eq, Copy, Clone, PartialEq)]
 pub enum VocabularyType {
+    /// For models without vocab
     NONE = llama_cpp_sys::LLAMA_VOCAB_TYPE_NONE as _,
+    /// LLaMA tokenizer based on byte-level BPE with byte fallback
     SPM = llama_cpp_sys::LLAMA_VOCAB_TYPE_SPM as _,
+    /// GPT-2 tokenizer based on byte-level BPE
     BPE = llama_cpp_sys::LLAMA_VOCAB_TYPE_BPE as _,
+    /// BERT tokenizer based on WordPiece
     WPM = llama_cpp_sys::LLAMA_VOCAB_TYPE_WPM as _,
+    /// T5 tokenizer based on Unigram
     UGM = llama_cpp_sys::LLAMA_VOCAB_TYPE_UGM as _,
+    /// RWKV tokenizer based on greedy tokenization
     RWKV = llama_cpp_sys::LLAMA_VOCAB_TYPE_RWKV as _,
+    /// PLaMo-2 tokenizer based on Aho-Corasick with dynamic programming
+    PLAMO2 = llama_cpp_sys::LLAMA_VOCAB_TYPE_PLAMO2 as _,
+}
+
+#[derive(Debug, Snafu)]
+#[snafu(visibility(pub(crate)))]
+pub enum VocabularyTypeError {
+    #[snafu(display("Nonsupport llama vocab type: {from}"))]
+    NonsupportValue {
+        from: llama_cpp_sys::llama_vocab_type,
+    },
 }
 
 impl TryFrom<llama_cpp_sys::llama_vocab_type> for VocabularyType {
-    type Error = VocabularyTypeConversionError;
+    type Error = VocabularyTypeError;
 
     fn try_from(value: llama_cpp_sys::llama_vocab_type) -> Result<Self, Self::Error> {
         use self::VocabularyType::*;
@@ -293,7 +343,23 @@ impl TryFrom<llama_cpp_sys::llama_vocab_type> for VocabularyType {
             llama_cpp_sys::LLAMA_VOCAB_TYPE_WPM => Ok(WPM),
             llama_cpp_sys::LLAMA_VOCAB_TYPE_UGM => Ok(UGM),
             llama_cpp_sys::LLAMA_VOCAB_TYPE_RWKV => Ok(RWKV),
-            unknown => Err(VocabularyTypeConversionError::UnknownValue(unknown)),
+            llama_cpp_sys::LLAMA_VOCAB_TYPE_PLAMO2 => Ok(PLAMO2),
+            vocab_type => Err(VocabularyTypeError::NonsupportValue { from: vocab_type }),
+        }
+    }
+}
+
+impl From<VocabularyType> for llama_cpp_sys::llama_vocab_type {
+    fn from(value: VocabularyType) -> Self {
+        use self::VocabularyType::*;
+        match value {
+            NONE => llama_cpp_sys::LLAMA_VOCAB_TYPE_NONE,
+            SPM => llama_cpp_sys::LLAMA_VOCAB_TYPE_SPM,
+            BPE => llama_cpp_sys::LLAMA_VOCAB_TYPE_BPE,
+            WPM => llama_cpp_sys::LLAMA_VOCAB_TYPE_WPM,
+            UGM => llama_cpp_sys::LLAMA_VOCAB_TYPE_UGM,
+            RWKV => llama_cpp_sys::LLAMA_VOCAB_TYPE_RWKV,
+            PLAMO2 => llama_cpp_sys::LLAMA_VOCAB_TYPE_PLAMO2,
         }
     }
 }

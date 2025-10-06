@@ -15,7 +15,7 @@ pub enum Strategy {
 #[derive(Debug, Snafu)]
 #[snafu(visibility(pub(crate)))]
 pub enum StrategyError {
-    #[snafu(display("Nonsupport ggml_numa_strategy: {from}"))]
+    #[snafu(display("Nonsupport ggml numa strategy: {from}"))]
     NonsupportValue {
         from: llama_cpp_sys::ggml_numa_strategy,
     },

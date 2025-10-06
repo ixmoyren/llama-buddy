@@ -1,6 +1,9 @@
 extern crate core;
 
-use crate::{batch::BatchError, ggml_numa::StrategyError as GgmlNumaStrategyError};
+use crate::{
+    batch::BatchError, ggml_numa::StrategyError as GgmlNumaStrategyError,
+    vocabulary::VocabularyTypeError,
+};
 use snafu::Snafu;
 
 pub mod batch;
@@ -22,6 +25,8 @@ pub enum Error {
     Batch { source: BatchError },
     #[snafu(transparent)]
     GgmlNuma { source: GgmlNumaStrategyError },
+    #[snafu(transparent)]
+    VocabType { source: VocabularyTypeError },
     #[snafu(whatever, display("{message}"))]
     GenericError {
         message: String,

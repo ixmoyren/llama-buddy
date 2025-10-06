@@ -4,7 +4,6 @@ mod context;
 mod lora;
 mod model;
 mod token;
-mod vocabulary;
 
 pub use cache::KvCacheConversionError;
 pub use chat::{ChatMessageError, ChatTemplateError};
@@ -15,9 +14,6 @@ pub use model::{
 };
 use thiserror::Error;
 pub use token::TokenTypeConversionError;
-pub use vocabulary::{
-    DeTokenizeError, TokenToPieceError, TokenizeError, VocabularyTypeConversionError,
-};
 
 /// llama_cpp 全部的错误汇总
 #[derive(Debug, Eq, PartialEq, Error)]
@@ -48,12 +44,4 @@ pub enum LLamaCppError {
     Embeddings(#[from] EmbeddingsError),
     #[error("{0}")]
     KvCacheConversion(#[from] KvCacheConversionError),
-    #[error("{0}")]
-    VocabularyTypeConversion(#[from] VocabularyTypeConversionError),
-    #[error("{0}")]
-    TokenToPiece(#[from] TokenToPieceError),
-    #[error("{0}")]
-    Tokenize(#[from] TokenizeError),
-    #[error("{0}")]
-    DeTokenize(#[from] DeTokenizeError),
 }
