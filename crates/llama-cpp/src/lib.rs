@@ -1,8 +1,6 @@
-extern crate core;
-
 use crate::{
-    batch::BatchError, ggml_numa::StrategyError as GgmlNumaStrategyError,
-    vocabulary::VocabularyTypeError,
+    batch::BatchError, context::ContextError, ggml_numa::StrategyError as GgmlNumaStrategyError,
+    runtime::RuntimeError, vocabulary::VocabularyTypeError,
 };
 use snafu::Snafu;
 
@@ -22,11 +20,15 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, Snafu)]
 pub enum Error {
     #[snafu(transparent)]
+    Runtime { source: RuntimeError },
+    #[snafu(transparent)]
     Batch { source: BatchError },
     #[snafu(transparent)]
     GgmlNuma { source: GgmlNumaStrategyError },
     #[snafu(transparent)]
     VocabType { source: VocabularyTypeError },
+    #[snafu(transparent)]
+    Context { source: ContextError },
     #[snafu(whatever, display("{message}"))]
     GenericError {
         message: String,

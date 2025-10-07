@@ -1,14 +1,12 @@
 use crate::{
     context::{Context, ContextParams},
-    error::{
-        EmbeddingsError, LlamaAdapterLoraRemoveError, LlamaAdapterLoraSetError,
-        LlamaContextLoadError, LlamaModelLoadError,
-    },
+    error::{LlamaAdapterLoraRemoveError, LlamaAdapterLoraSetError, LlamaModelLoadError},
     ggml_numa::Strategy,
     model::{AdapterLora, Model, ModelParams},
     sampler::Sampler,
     token::{Token, TokenData, TokenDataVec},
 };
+use snafu::prelude::*;
 use std::{
     ffi::{CString, c_char, c_void},
     path::{Path, PathBuf},
@@ -23,6 +21,21 @@ static BACKEND_INITIALIZED: OnceLock<BackendInitializedType> = OnceLock::new();
 /// 用于初始化 llama.cpp
 #[derive(Debug, Eq, PartialEq)]
 pub struct Runtime;
+
+#[derive(Debug, Snafu)]
+#[snafu(visibility(pub(crate)))]
+pub enum RuntimeError {
+    #[snafu(display("Null reference from llama.cpp, when load context"))]
+    ContextLoadNullReturn,
+    #[snafu(display("Embeddings weren't enabled in the context options"))]
+    EmbeddingsNotEnable,
+    #[snafu(display("Logits were not enabled for the given token"))]
+    EmbeddingsLogitsNotEnabled,
+    #[snafu(display(
+        "Can't use sequence embeddings with a model supporting only LLAMA_POOLING_TYPE_NONE"
+    ))]
+    EmbeddingsNonePoolType,
+}
 
 impl Runtime {
     /// 初始化 llama + ggml 后端
@@ -172,10 +185,10 @@ impl Runtime {
         &self,
         model: &Model,
         params: ContextParams,
-    ) -> Result<Context, LlamaContextLoadError> {
+    ) -> Result<Context, RuntimeError> {
         let context =
             unsafe { llama_cpp_sys::llama_new_context_with_model(model.raw_mut(), params.raw()) };
-        let context = NonNull::new(context).ok_or(LlamaContextLoadError::NullReturn)?;
+        let context = NonNull::new(context).context(ContextLoadNullReturnSnafu)?;
 
         Ok(Context::new(context, params.embeddings()))
     }
@@ -217,10 +230,8 @@ impl Runtime {
         model: &Model,
         context: &mut Context,
         i: i32,
-    ) -> Result<&[f32], EmbeddingsError> {
-        if !context.embeddings_enabled() {
-            return Err(EmbeddingsError::NotEnabled);
-        }
+    ) -> Result<&[f32], RuntimeError> {
+        ensure!(context.embeddings_enabled(), EmbeddingsNotEnableSnafu);
 
         let n_embd = usize::try_from(model.n_embd()).expect("n_embd does not fit into a usize");
 
@@ -228,11 +239,9 @@ impl Runtime {
             let embedding = llama_cpp_sys::llama_get_embeddings_seq(context.raw_mut(), i);
 
             // Technically also possible whenever `i >= max(batch.n_seq)`, but can't check that here.
-            if embedding.is_null() {
-                Err(EmbeddingsError::NonePoolType)
-            } else {
-                Ok(slice::from_raw_parts(embedding, n_embd))
-            }
+            ensure!(!embedding.is_null(), EmbeddingsNonePoolTypeSnafu);
+
+            Ok(slice::from_raw_parts(embedding, n_embd))
         }
     }
 
@@ -241,21 +250,17 @@ impl Runtime {
         model: &Model,
         context: &mut Context,
         i: i32,
-    ) -> Result<&[f32], EmbeddingsError> {
-        if !context.embeddings_enabled() {
-            return Err(EmbeddingsError::NotEnabled);
-        }
+    ) -> Result<&[f32], RuntimeError> {
+        ensure!(context.embeddings_enabled(), EmbeddingsNotEnableSnafu);
 
         let n_embd = usize::try_from(model.n_embd()).expect("n_embd does not fit into a usize");
 
         unsafe {
             let embedding = llama_cpp_sys::llama_get_embeddings_ith(context.raw_mut(), i);
             // Technically also possible whenever `i >= batch.n_tokens`, but no good way of checking `n_tokens` here.
-            if embedding.is_null() {
-                Err(EmbeddingsError::LogitsNotEnabled)
-            } else {
-                Ok(slice::from_raw_parts(embedding, n_embd))
-            }
+
+            ensure!(!embedding.is_null(), EmbeddingsLogitsNotEnabledSnafu);
+            Ok(slice::from_raw_parts(embedding, n_embd))
         }
     }
 

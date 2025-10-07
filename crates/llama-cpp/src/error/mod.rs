@@ -1,13 +1,9 @@
-mod cache;
 mod chat;
-mod context;
 mod lora;
 mod model;
 mod token;
 
-pub use cache::KvCacheConversionError;
 pub use chat::{ChatMessageError, ChatTemplateError};
-pub use context::{DecodeError, EmbeddingsError, EncodeError, LlamaContextLoadError};
 pub use lora::{LlamaAdapterLoraInitError, LlamaAdapterLoraRemoveError, LlamaAdapterLoraSetError};
 pub use model::{
     ApplyChatTemplateError, LlamaModelLoadError, StringConversionError, TokenConversionError,
@@ -34,14 +30,4 @@ pub enum LLamaCppError {
     LlamaModelLoad(#[from] LlamaModelLoadError),
     #[error("{0}")]
     LlamaAdapterLoraInit(#[from] LlamaAdapterLoraInitError),
-    #[error("{0}")]
-    LlamaContextLoad(#[from] LlamaContextLoadError),
-    #[error("{0}")]
-    ContextDecode(#[from] DecodeError),
-    #[error("{0}")]
-    ContextEncode(#[from] EncodeError),
-    #[error("{0}")]
-    Embeddings(#[from] EmbeddingsError),
-    #[error("{0}")]
-    KvCacheConversion(#[from] KvCacheConversionError),
 }

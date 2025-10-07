@@ -6,12 +6,15 @@ pub use perf::Perf;
 
 use crate::{
     batch::Batch,
-    error::{DecodeError, EncodeError, KvCacheConversionError},
+    context::ContextError::{
+        DecodeAborted, DecodeCouldNotFindKvSlot, DecodeFatal, DecodeInvalidInputBatch,
+        DecodeUnknown, EncodeUnknown,
+    },
 };
+use snafu::prelude::*;
 use std::{
-    ffi::c_int,
     fmt::{Debug, Formatter},
-    num::{NonZeroI32, NonZeroU8},
+    num::{NonZeroU8, TryFromIntError},
     ptr::NonNull,
 };
 
@@ -20,6 +23,43 @@ pub struct Context {
     raw: NonNull<llama_cpp_sys::llama_context>,
     initialized_logits: Vec<i32>,
     embeddings_enabled: bool,
+}
+
+#[derive(Debug, Snafu)]
+#[snafu(visibility(pub(crate)))]
+pub enum ContextError {
+    #[snafu(display("An unknown error occurred when decode: {code}"))]
+    DecodeUnknown { code: i32 },
+    #[snafu(display("A fatal error when decode: {code}"))]
+    DecodeFatal { code: i32 },
+    #[snafu(display("Invalid input batch when decode"))]
+    DecodeInvalidInputBatch,
+    #[snafu(display("Aborted when decode"))]
+    DecodeAborted,
+    #[snafu(display(
+        "could not find a KV slot for the batch (try reducing the size of the batch or increase the context)"
+    ))]
+    DecodeCouldNotFindKvSlot,
+    #[snafu(display("An unknown error occurred when encode: {code}"))]
+    EncodeUnknown { code: i32 },
+    #[snafu(display("Provided start position is too large for u32, when memory seq cp"))]
+    MemorySeqCpP0TooLarge { source: TryFromIntError },
+    #[snafu(display("Provided end position is too large for u32, when memory seq cp"))]
+    MemorySeqCpP1TooLarge { source: TryFromIntError },
+    #[snafu(display("Provided sequence id is too large for u32, when memory seq cp"))]
+    MemorySeqRmIdTooLarge { source: TryFromIntError },
+    #[snafu(display("Provided start position is too large for u32, when memory seq rm"))]
+    MemorySeqRmP0TooLarge { source: TryFromIntError },
+    #[snafu(display("Provided end position is too large for u32, when memory seq rm"))]
+    MemorySeqRmP1TooLarge { source: TryFromIntError },
+    #[snafu(display("Provided start position is too large for u32, when memory seq add"))]
+    MemorySeqAddP0TooLarge { source: TryFromIntError },
+    #[snafu(display("Provided end position is too large for u32, when memory seq add"))]
+    MemorySeqAddP1TooLarge { source: TryFromIntError },
+    #[snafu(display("Provided start position is too large for u32, when memory seq div"))]
+    MemorySeqDivP0TooLarge { source: TryFromIntError },
+    #[snafu(display("Provided end position is too large for u32, when memory seq div"))]
+    MemorySeqDivP1TooLarge { source: TryFromIntError },
 }
 
 impl Debug for Context {
@@ -73,21 +113,44 @@ impl Context {
         unsafe { llama_cpp_sys::llama_n_ctx(self.raw.as_ptr()) }
     }
 
-    pub fn decode(&mut self, batch: &mut Batch) -> Result<(), DecodeError> {
+    /// 处理一批令牌，使用解码器处理批处理
+    ///
+    /// 正返回值并不意味着致命错误，而是一个警告
+    ///
+    /// 在发生致命错误或中止时，设法处理的ubatch将保留在上下文的内存状态中，要正确处理此问题，请使用 `llama_memory_seq_pos_min` 和 `llama_memory_seq_pos_max`
+    ///
+    /// 对于其他返回值，内存状态将恢复到此调用之前的状态
+    ///
+    /// - 0 - 成功
+    /// - 1 - 找不到批次的KV插槽（尝试减少批次的大小或增加上下文）
+    /// - 2 - 中止（已处理的ubatch将保留在上下文的内存中）
+    /// - -1 - 无效的输入批
+    /// - < -1 - 致命错误（处理过的ubatch将保留在上下文的内存中）
+    pub fn decode(&mut self, batch: &mut Batch) -> Result<(), ContextError> {
         let result = unsafe { llama_cpp_sys::llama_decode(self.raw.as_ptr(), batch.raw()) };
 
-        match NonZeroI32::new(result) {
-            None => Ok(()),
-            Some(error_code) => Err(error_code.into()),
+        match result {
+            0 => Ok(()),
+            1 => Err(DecodeCouldNotFindKvSlot),
+            2 => Err(DecodeAborted),
+            -1 => Err(DecodeInvalidInputBatch),
+            i if i < -1 => Err(DecodeFatal { code: i }),
+            i => Err(DecodeUnknown { code: i }),
         }
     }
 
-    pub fn encode(&mut self, batch: &mut Batch) -> Result<(), EncodeError> {
+    /// 将 `token` 进行编码，不使用 `KV cache`
+    ///
+    /// 可以在内部存储编码器输出，供 `decoder's cross-attention layers` 使用
+    ///
+    /// - 0 - 成功
+    /// - < 0 - 失败, 内存状态恢复到调用之前的状态
+    pub fn encode(&mut self, batch: &mut Batch) -> Result<(), ContextError> {
         let result = unsafe { llama_cpp_sys::llama_encode(self.raw.as_ptr(), batch.raw()) };
 
-        match NonZeroI32::new(result) {
-            None => Ok(()),
-            Some(error_code) => Err(error_code.into()),
+        match result {
+            0 => Ok(()),
+            i => Err(EncodeUnknown { code: i }),
         }
     }
 
@@ -95,19 +158,23 @@ impl Context {
         unsafe { llama_cpp_sys::llama_memory_seq_cp(self.memory_ptr(), src, dest, 0, size) }
     }
 
+    /// 将属于指定序列的所有令牌复制到另一个序列
+    ///
+    /// p0 < 0 : [0,  p1]
+    /// p1 < 0 : [p0, inf)
     pub fn copy_kv_cache_seq(
         &mut self,
         src: i32,
         dest: i32,
         p0: Option<u32>,
         p1: Option<u32>,
-    ) -> Result<(), KvCacheConversionError> {
+    ) -> Result<(), ContextError> {
         let p0 = p0
             .map_or(Ok(-1), i32::try_from)
-            .map_err(KvCacheConversionError::P0TooLarge)?;
+            .context(MemorySeqCpP0TooLargeSnafu)?;
         let p1 = p1
             .map_or(Ok(-1), i32::try_from)
-            .map_err(KvCacheConversionError::P1TooLarge)?;
+            .context(MemorySeqCpP1TooLargeSnafu)?;
         unsafe {
             llama_cpp_sys::llama_memory_seq_cp(self.memory_ptr(), src, dest, p0, p1);
         }
@@ -119,16 +186,16 @@ impl Context {
         src: Option<u32>,
         p0: Option<u32>,
         p1: Option<u32>,
-    ) -> Result<bool, KvCacheConversionError> {
+    ) -> Result<bool, ContextError> {
         let src = src
             .map_or(Ok(-1), i32::try_from)
-            .map_err(KvCacheConversionError::SeqIdTooLarge)?;
+            .context(MemorySeqRmIdTooLargeSnafu)?;
         let p0 = p0
             .map_or(Ok(-1), i32::try_from)
-            .map_err(KvCacheConversionError::P0TooLarge)?;
+            .context(MemorySeqRmP0TooLargeSnafu)?;
         let p1 = p1
             .map_or(Ok(-1), i32::try_from)
-            .map_err(KvCacheConversionError::P1TooLarge)?;
+            .context(MemorySeqRmP1TooLargeSnafu)?;
         Ok(unsafe { llama_cpp_sys::llama_memory_seq_rm(self.memory_ptr(), src, p0, p1) })
     }
 
@@ -146,13 +213,13 @@ impl Context {
         p0: Option<u32>,
         p1: Option<u32>,
         delta: i32,
-    ) -> Result<(), KvCacheConversionError> {
+    ) -> Result<(), ContextError> {
         let p0 = p0
             .map_or(Ok(-1), i32::try_from)
-            .map_err(KvCacheConversionError::P0TooLarge)?;
+            .context(MemorySeqAddP0TooLargeSnafu)?;
         let p1 = p1
             .map_or(Ok(-1), i32::try_from)
-            .map_err(KvCacheConversionError::P1TooLarge)?;
+            .context(MemorySeqAddP1TooLargeSnafu)?;
         unsafe {
             llama_cpp_sys::llama_memory_seq_add(self.memory_ptr(), seq_id, p0, p1, delta);
         }
@@ -165,15 +232,15 @@ impl Context {
         p0: Option<u32>,
         p1: Option<u32>,
         d: NonZeroU8,
-    ) -> Result<(), KvCacheConversionError> {
+    ) -> Result<(), ContextError> {
         let p0 = p0
             .map_or(Ok(-1), i32::try_from)
-            .map_err(KvCacheConversionError::P0TooLarge)?;
+            .context(MemorySeqDivP0TooLargeSnafu)?;
         let p1 = p1
             .map_or(Ok(-1), i32::try_from)
-            .map_err(KvCacheConversionError::P1TooLarge)?;
-        let d = c_int::from(d.get());
-        unsafe { llama_cpp_sys::llama_memory_seq_div(self.memory_ptr(), seq_id, p0, p1, d) }
+            .context(MemorySeqDivP1TooLargeSnafu)?;
+        let d = d.get();
+        unsafe { llama_cpp_sys::llama_memory_seq_div(self.memory_ptr(), seq_id, p0, p1, d.into()) }
         Ok(())
     }
 
