@@ -65,7 +65,7 @@ fn main() -> Result<(), Whatever> {
     let context_params = ContextParams::default()
         .with_n_ctx(n_ctx)
         .with_n_batch(token_quantity as u32)
-        .with_n_perf(false);
+        .with_no_perf(false);
 
     // 通过模型和上下文参数，初始化上下文
     let mut context = runtime

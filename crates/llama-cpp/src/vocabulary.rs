@@ -75,6 +75,15 @@ impl Vocabulary {
         unsafe { llama_cpp_sys::llama_token_is_eog(self.raw_mut(), token.raw()) }
     }
 
+    /// Token Id -> Piece.
+    ///
+    /// 使用提供的上下文中词汇表
+    ///
+    /// 不将空结束符写入缓冲区
+    ///
+    /// 用户可以在复制之前跳过 `lstrip` 前导空格（当使用 `add_space_prefix` 编码或者解码多个 token 时非常有用）
+    ///
+    /// special 如果为 true, 在输出中呈现特殊的 token
     pub fn token_to_piece(
         &self,
         token: &Token,
@@ -129,6 +138,13 @@ impl Vocabulary {
         Ok(str)
     }
 
+    /// 将提供的文本转换成 token 序列
+    ///
+    /// 令牌指针指向的空间必须以容纳生成的 token，成功生成的 token 数量不会超过 n_tokens_max
+    ///
+    /// 如果模型允许，可以通过 `add_special` 添加 `BOS` 或者 `EOS` 类型的令牌
+    ///
+    /// 设置 parse_special 允许 tokenize 特殊或控制等字符，否则不会暴露和处理作为明文，不插入前导空格。
     pub fn tokenize(
         &self,
         text: impl AsRef<str>,
@@ -149,6 +165,7 @@ impl Vocabulary {
 
         // 通过 token 为 null 和 n_tokens_max 为 0, 可以计算 text 中令牌的数量
         let token_len = unsafe {
+            // 失败时返回一个负数，原本应该生成的 token 数量，这里是为了获取生成 token 的数量，所以要加上 -
             -llama_cpp_sys::llama_tokenize(
                 vocab,
                 text.as_ptr(),
@@ -159,7 +176,6 @@ impl Vocabulary {
                 parse_special,
             )
         };
-
         ensure!(token_len > 0, TokenizeTokenTooManySnafu { size: token_len });
 
         let mut tokens = Vec::<llama_cpp_sys::llama_token>::with_capacity(token_len as usize);
@@ -188,6 +204,11 @@ impl Vocabulary {
         Ok(tokens.into_iter().map(Token::from).collect())
     }
 
+    /// 将提供的 token 序列转换为文本
+    ///
+    /// 如果模型允许，通过 `remove_special` 设置为 true 允许删除 `BOS` 和 `EOS` 令牌
+    ///
+    /// `unparse_special` 如果为 true，则在输出中呈现特殊 token
     pub fn detokenize(
         &self,
         tokens: &[Token],
@@ -206,6 +227,7 @@ impl Vocabulary {
         let mut buf = vec![0_u8; buf_size];
 
         let mut de_tokenize_len = unsafe {
+            // 失败时返回一个负数，本应返回的字符/字节数
             llama_cpp_sys::llama_detokenize(
                 vocab,
                 tokens,
@@ -223,6 +245,7 @@ impl Vocabulary {
                 from: -de_tokenize_len,
             })?;
             buf = vec![0_u8; buf_size];
+            // 失败时返回一个负数 - 本应返回的字符/字节数
             de_tokenize_len = unsafe {
                 llama_cpp_sys::llama_detokenize(
                     vocab,
@@ -351,15 +374,6 @@ impl TryFrom<llama_cpp_sys::llama_vocab_type> for VocabularyType {
 
 impl From<VocabularyType> for llama_cpp_sys::llama_vocab_type {
     fn from(value: VocabularyType) -> Self {
-        use self::VocabularyType::*;
-        match value {
-            NONE => llama_cpp_sys::LLAMA_VOCAB_TYPE_NONE,
-            SPM => llama_cpp_sys::LLAMA_VOCAB_TYPE_SPM,
-            BPE => llama_cpp_sys::LLAMA_VOCAB_TYPE_BPE,
-            WPM => llama_cpp_sys::LLAMA_VOCAB_TYPE_WPM,
-            UGM => llama_cpp_sys::LLAMA_VOCAB_TYPE_UGM,
-            RWKV => llama_cpp_sys::LLAMA_VOCAB_TYPE_RWKV,
-            PLAMO2 => llama_cpp_sys::LLAMA_VOCAB_TYPE_PLAMO2,
-        }
+        value as _
     }
 }
