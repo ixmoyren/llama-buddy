@@ -1,6 +1,5 @@
 use crate::{
     context::{Context, ContextParams},
-    error::{LlamaAdapterLoraRemoveError, LlamaAdapterLoraSetError},
     ggml_numa::Strategy,
     model::{AdapterLora, Model, ModelParams},
     sampler::Sampler,
@@ -36,13 +35,15 @@ pub enum RuntimeError {
     ))]
     EmbeddingsNonePoolType,
     #[snafu(display(
-        "There was a null byte in a provided string, and thus it could not be converted to a C string"
+        "There was a null byte in a provided string, and thus it could not be converted to a CString"
     ))]
     ModelLoadNul { source: std::ffi::NulError },
     #[snafu(display("llama.cpp returned a nullptr"))]
     ModelLoadNullReturn,
-    #[snafu(display("Could not convert {path:?} to a str"))]
-    ModelLoadPathToStr { path: PathBuf },
+    #[snafu(display("Error code(code) from llama.cpp"))]
+    LlamaAdapterLoraRemoveErrorReturn { code: i32 },
+    #[snafu(display("Error code(code) from llama.cpp"))]
+    LlamaAdapterLoraSetErrorReturn { code: i32 },
 }
 
 impl Runtime {
@@ -206,13 +207,15 @@ impl Runtime {
         context: &mut Context,
         adapter: &mut AdapterLora,
         scale: f32,
-    ) -> Result<(), LlamaAdapterLoraSetError> {
+    ) -> Result<(), RuntimeError> {
         let err_code = unsafe {
             llama_cpp_sys::llama_set_adapter_lora(context.raw_mut(), adapter.raw_mut(), scale)
         };
-        if err_code != 0 {
-            return Err(LlamaAdapterLoraSetError::ErrorReturn(err_code));
-        }
+
+        ensure!(
+            err_code == 0,
+            LlamaAdapterLoraSetErrorReturnSnafu { code: err_code }
+        );
 
         tracing::debug!("Set lora adapter");
         Ok(())
@@ -222,12 +225,14 @@ impl Runtime {
         &self,
         context: &mut Context,
         adapter: &mut AdapterLora,
-    ) -> Result<(), LlamaAdapterLoraRemoveError> {
+    ) -> Result<(), RuntimeError> {
         let err_code =
             unsafe { llama_cpp_sys::llama_rm_adapter_lora(context.raw_mut(), adapter.raw_mut()) };
-        if err_code != 0 {
-            return Err(LlamaAdapterLoraRemoveError::ErrorReturn(err_code));
-        }
+
+        ensure!(
+            err_code == 0,
+            LlamaAdapterLoraRemoveErrorReturnSnafu { code: err_code }
+        );
 
         tracing::debug!("Remove lora adapter");
         Ok(())

@@ -1627,7 +1627,6 @@ dependencies = [
  "llama-cpp-sys",
  "rustyline",
  "snafu",
- "thiserror",
  "tracing",
 ]
 

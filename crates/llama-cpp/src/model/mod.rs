@@ -7,17 +7,16 @@ pub use lora::*;
 pub use params::*;
 
 use crate::{
-    error::LlamaAdapterLoraInitError,
     token::{Token, TokenAttr, TokenAttrs},
     vocabulary::Vocabulary,
 };
-use snafu::{ResultExt, Snafu, ensure};
+use snafu::{OptionExt, ResultExt, Snafu, ensure};
 use std::{
     ffi::{CStr, CString},
     num::{NonZeroU16, TryFromIntError},
     ops::{Deref, DerefMut},
     os::raw::{c_char, c_int},
-    path::Path,
+    path::{Path, PathBuf},
     ptr,
     ptr::NonNull,
 };
@@ -61,6 +60,14 @@ pub enum ModelError {
     TokenizeI32IntoUsize { from: i32, source: TryFromIntError },
     #[snafu(display("The original bytes cannot be converted to str"))]
     TokenizeToString { source: std::string::FromUtf8Error },
+    #[snafu(display(
+        "There was a null byte in a provided string, and thus it could not be converted to a CString"
+    ))]
+    AdapterLoraInitNul { source: std::ffi::NulError },
+    #[snafu(display("llama.cpp returned a nullptr"))]
+    AdapterLoraInitNullReturn,
+    #[snafu(display("Could not convert {path:?} to a str"))]
+    AdapterLoraInitPathToStr { path: PathBuf },
 }
 
 unsafe impl Send for Model {}
@@ -379,22 +386,19 @@ impl Model {
         Ok(template.into())
     }
 
-    pub fn lora_adapter_init(
-        &self,
-        path: impl AsRef<Path>,
-    ) -> Result<AdapterLora, LlamaAdapterLoraInitError> {
+    pub fn lora_adapter_init(&self, path: impl AsRef<Path>) -> Result<AdapterLora, ModelError> {
         let path = path.as_ref();
         debug_assert!(Path::new(path).exists(), "{path:?} does not exist");
 
-        let path = path
-            .to_str()
-            .ok_or(LlamaAdapterLoraInitError::PathToStr(path.to_path_buf()))?;
+        let path = path.to_str().context(AdapterLoraInitPathToStrSnafu {
+            path: path.to_path_buf(),
+        })?;
 
-        let cstr = CString::new(path)?;
+        let cstr = CString::new(path).context(AdapterLoraInitNulSnafu)?;
         let adapter =
             unsafe { llama_cpp_sys::llama_adapter_lora_init(self.raw.as_ptr(), cstr.as_ptr()) };
 
-        let adapter = NonNull::new(adapter).ok_or(LlamaAdapterLoraInitError::NullReturn)?;
+        let adapter = NonNull::new(adapter).context(AdapterLoraInitNullReturnSnafu)?;
 
         tracing::debug!(?path, "Initialized lora adapter");
         Ok(adapter.into())

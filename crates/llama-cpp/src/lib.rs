@@ -11,7 +11,6 @@ use snafu::Snafu;
 
 pub mod batch;
 pub mod context;
-pub mod error;
 pub mod ggml_numa;
 pub mod model;
 pub mod runtime;

@@ -14,7 +14,6 @@ path = "src/lib.rs"
 enumflags2 = { version = "0.7", features = ["std"] }
 llama-cpp-sys = { path = "../llama-cpp-sys", optional = true }
 tracing = { workspace = true }
-thiserror = { workspace = true }
 snafu = { workspace = true }
 
 [features]

@@ -1,5 +1,7 @@
+use snafu::Snafu;
 use std::{
     ops::{Deref, DerefMut},
+    path::PathBuf,
     ptr::NonNull,
 };
 
@@ -12,10 +14,32 @@ pub struct AdapterLora {
     raw: NonNull<llama_cpp_sys::llama_adapter_lora>,
 }
 
+#[derive(Debug, Snafu)]
+#[snafu(visibility(pub(crate)))]
+pub enum AdapterLoraError {
+    #[snafu(display("Null reference from llama.cpp, when load context"))]
+    ContextLoadNullReturn,
+    #[snafu(display("Embeddings weren't enabled in the context options"))]
+    EmbeddingsNotEnable,
+    #[snafu(display("Logits were not enabled for the given token"))]
+    EmbeddingsLogitsNotEnabled,
+    #[snafu(display(
+        "Can't use sequence embeddings with a model supporting only LLAMA_POOLING_TYPE_NONE"
+    ))]
+    EmbeddingsNonePoolType,
+    #[snafu(display(
+        "There was a null byte in a provided string, and thus it could not be converted to a C string"
+    ))]
+    ModelLoadNul { source: std::ffi::NulError },
+    #[snafu(display("llama.cpp returned a nullptr"))]
+    ModelLoadNullReturn,
+    #[snafu(display("Could not convert {path:?} to a str"))]
+    ModelLoadPathToStr { path: PathBuf },
+}
+
 impl AdapterLora {
     pub fn raw_mut(&self) -> *mut llama_cpp_sys::llama_adapter_lora {
-        let raw = self.raw.as_ptr();
-        raw
+        self.raw.as_ptr()
     }
 }
 
