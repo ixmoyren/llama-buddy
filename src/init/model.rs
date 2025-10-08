@@ -27,11 +27,15 @@ pub(crate) async fn fetch_library_html(
     Ok(library_html)
 }
 
-// 获取到一个模型的基本信息
-// 模型有不同的规格，每个规格的模型一般会提供四个文件，一个是模型本体，一个是许可，一个是模板，一个是提示词
-// 通过 href 可以访问到这个模型的详细页面
-// 从详细页面中获取模型 summary 和 readme
-// 从 /tags 页面可以获取全部的规格列表
+/// 获取到一个模型的基本信息
+///
+/// 模型有不同的规格，每个规格的模型一般会提供四个文件，一个是模型本体，一个是许可，一个是模板，一个是提示词
+///
+/// 通过 href 可以访问到这个模型的详细页面
+///
+/// 从详细页面中获取模型 summary 和 readme
+///
+/// 从 /tags 页面可以获取全部的规格列表
 pub(crate) async fn fetch_model_more_info(
     model: &ModelInfo,
     client: Client,
