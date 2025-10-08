@@ -1,4 +1,5 @@
 use rusqlite::Connection;
+use snafu::{Whatever, prelude::*};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const SET_INIT_STATUS: &str =
@@ -28,25 +29,40 @@ impl AsRef<str> for CompletedStatus {
 }
 
 /// 完成初始化
-pub fn completed_init(conn: &Connection, completed_status: CompletedStatus) -> anyhow::Result<()> {
-    let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
+pub fn completed_init(
+    conn: &Connection,
+    completed_status: CompletedStatus,
+) -> Result<(), Whatever> {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .with_whatever_context(|_| "Failed to get system time when set init status to completed")?
+        .as_secs();
     let status = completed_status.as_ref();
-    conn.execute(SET_INIT_STATUS, (status, &now))?;
+    conn.execute(SET_INIT_STATUS, (status, &now))
+        .with_whatever_context(|_| "Failed to set init status to completed")?;
     Ok(())
 }
 
 /// 检查模型信息是否全部插入到表中
-pub fn check_insert_model_info_completed(conn: &Connection) -> anyhow::Result<bool> {
-    let init_status = conn.query_row(QUERY_INSERT_MODEL_INFO_COMPLETED, [], |r| {
-        r.get::<_, Vec<u8>>(0)
-    })?;
-    let init_status = String::from_utf8(init_status)?;
+pub fn check_insert_model_info_completed(conn: &Connection) -> Result<bool, Whatever> {
+    let init_status = conn
+        .query_row(QUERY_INSERT_MODEL_INFO_COMPLETED, [], |r| {
+            r.get::<_, Vec<u8>>(0)
+        })
+        .with_whatever_context(|_| "Failed to get init status")?;
+    let init_status = String::from_utf8(init_status)
+        .with_whatever_context(|_| "Couldn't convert init_status to string")?;
     Ok(init_status == "Completed")
 }
 
 /// 插入一个新的配置项，如果配置项已经存在，那么则更新这个配置项
-pub fn insert_config(conn: &Connection, name: impl ToString, value: Vec<u8>) -> anyhow::Result<()> {
+pub fn insert_config(
+    conn: &Connection,
+    name: impl ToString,
+    value: Vec<u8>,
+) -> Result<(), Whatever> {
     let name = name.to_string();
-    conn.execute(INSERT_CONFIG_ITEM, (&name, &value))?;
+    conn.execute(INSERT_CONFIG_ITEM, (&name, &value))
+        .with_whatever_context(|_| "Failed to insert config")?;
     Ok(())
 }

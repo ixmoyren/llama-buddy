@@ -1,6 +1,5 @@
 mod config;
 mod db;
-mod error;
 mod init;
 mod pull;
 
@@ -40,15 +39,13 @@ enum Commands {
 }
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn main() {
     tracing_subscriber::fmt().with_max_level(Level::INFO).init();
 
     let cli = Cli::parse();
     match cli.command {
-        Commands::Config => output().await?,
-        Commands::Init(args) => init_local_registry(args).await?,
-        Commands::Pull(args) => pull_model_from_registry(args).await?,
+        Commands::Config => output().await,
+        Commands::Init(args) => init_local_registry(args).await,
+        Commands::Pull(args) => pull_model_from_registry(args).await,
     }
-
-    Ok(())
 }

@@ -17,7 +17,7 @@ use tokio::sync::Mutex;
 use tracing::{error, info};
 use url::Url;
 
-pub async fn init_local_registry(args: InitArgs) -> anyhow::Result<()> {
+pub async fn init_local_registry(args: InitArgs) {
     let InitArgs {
         remote_registry: new_remote,
         path: new_data_path,
@@ -37,7 +37,7 @@ pub async fn init_local_registry(args: InitArgs) -> anyhow::Result<()> {
             model,
         },
         config_path,
-    ) = LLamaBuddyConfig::try_config_path()?;
+    ) = LLamaBuddyConfig::try_config_path().expect("Couldn't get the config");
     let data_path = new_data_path.unwrap_or(path);
     let client_config = if let Some(new) = http_client_config {
         client_config.merge(new)
@@ -45,20 +45,24 @@ pub async fn init_local_registry(args: InitArgs) -> anyhow::Result<()> {
         client_config
     };
     let remote = new_remote.unwrap_or(remote);
-    let client = client_config.build_client()?;
+    let client = client_config
+        .build_client()
+        .expect("Couldn't build reqwest client");
     if force {
-        fs::remove_dir_all(data_path.as_path())?
+        fs::remove_dir_all(data_path.as_path())
+            .expect("Couldn't remove all dir when force init repo")
     }
     // 打开数据库文件，创建数据库并且创建配置表、模型信息表
     let sqlite_dir = data_path.join("sqlite");
-    let conn = db::open(sqlite_dir, "llama-buddy.sqlite")?;
+    let conn = db::open(sqlite_dir, "llama-buddy.sqlite").expect("Couldn't open sqlite file");
     // 检查一下有没有完成初始化，初始化已经完成，那么直接退出
-    if check_init_completed(&conn)? {
+    if check_init_completed(&conn).expect("Couldn't check init whatever completed") {
         info!("Initialization completed");
-        return Ok(());
     }
-    if !check_insert_model_info_completed(&conn)? {
-        let mut old_model_raw_digest_map = query_model_title_and_model_info(&conn)?;
+    if !check_insert_model_info_completed(&conn)
+        .expect("Couldn't check insert_model_info whatever completed")
+    {
+        let old_model_raw_digest_map = query_model_title_and_model_info(&conn).unwrap();
         // 创建一个单生产者单消费者的 channel，用来传递 library_html
         let (library_html_sender, library_html_receiver) =
             tokio::sync::oneshot::channel::<String>();
@@ -146,10 +150,11 @@ pub async fn init_local_registry(args: InitArgs) -> anyhow::Result<()> {
             },
             model,
         };
-        config.write_to_toml(config_path.as_path())?;
+        config
+            .write_to_toml(config_path.as_path())
+            .expect("Failed to write all configs to file");
     }
     info!("Initialization completed");
-    Ok(())
 }
 
 #[derive(Args)]

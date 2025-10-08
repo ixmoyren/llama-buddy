@@ -1,8 +1,8 @@
 use crate::db::{Model, ModelInfo};
-use anyhow::anyhow;
 use http_extra::sha256::digest;
 use reqwest::Client;
 use scraper::{ElementRef, Html, Selector};
+use snafu::{Whatever, prelude::*};
 use std::collections::VecDeque;
 use tracing::debug;
 use url::Url;
@@ -10,11 +10,20 @@ use url::Url;
 pub(crate) async fn fetch_library_html(
     client: Client,
     remote_registry: Url,
-) -> anyhow::Result<String> {
-    let library_url = remote_registry.join("/library?sort=newest")?;
+) -> Result<String, Whatever> {
+    let library_url = remote_registry
+        .join("/library?sort=newest")
+        .with_whatever_context(|_| "Failed to join the library url")?;
     debug!("Fetching model information from {library_url:?}");
-    let response = client.get(library_url).send().await?;
-    let library_html = response.text().await?;
+    let response = client
+        .get(library_url)
+        .send()
+        .await
+        .with_whatever_context(|_| "Failed to fetch the library page")?;
+    let library_html = response
+        .text()
+        .await
+        .with_whatever_context(|_| "Failed to read the library page")?;
     Ok(library_html)
 }
 
@@ -27,24 +36,43 @@ pub(crate) async fn fetch_model_more_info(
     model: &ModelInfo,
     client: Client,
     remote_registry: Url,
-) -> anyhow::Result<(String, String, String, Vec<Model>)> {
+) -> Result<(String, String, String, Vec<Model>), Whatever> {
     // 获取模型的 summary 和 readme
     let model_href = model.href.as_str();
-    let model_url = remote_registry.join(model_href)?;
-    let response = client.get(model_url).send().await?;
-    let model_html = response.text().await?;
+    let model_url = remote_registry
+        .join(model_href)
+        .with_whatever_context(|_| "Failed to join the model url")?;
+    let response = client
+        .get(model_url)
+        .send()
+        .await
+        .with_whatever_context(|_| "Failed to fetch the model page")?;
+    let model_html = response
+        .text()
+        .await
+        .with_whatever_context(|_| "Failed to read the model page")?;
     let html_str = model_html.as_str();
-    let (summary, readme) = convert_to_model_summary(html_str)?;
+    let (summary, readme) = convert_to_model_summary(html_str)
+        .with_whatever_context(|_| "Failed to convert the model summary")?;
     // 获取模型的全部 tags
     let model_all_tags_url = format!("{model_href}/tags");
-    let model_tags_url = remote_registry.join(model_all_tags_url.as_str())?;
-    let response = client.get(model_tags_url).send().await?;
-    let model_all_tag_html = response.text().await?;
+    let model_tags_url = remote_registry
+        .join(model_all_tags_url.as_str())
+        .with_whatever_context(|_| "Failed to join model tags url")?;
+    let response = client
+        .get(model_tags_url)
+        .send()
+        .await
+        .with_whatever_context(|_| "Failed to fetch the model tags page")?;
+    let model_all_tag_html = response
+        .text()
+        .await
+        .with_whatever_context(|_| "Failed to read the model tags page")?;
     let model_tag_vec = covert_to_model_tag(model_all_tag_html)?;
     Ok((summary, readme, model_html, model_tag_vec))
 }
 
-fn covert_to_model_tag(html: impl AsRef<str>) -> anyhow::Result<Vec<Model>> {
+fn covert_to_model_tag(html: impl AsRef<str>) -> Result<Vec<Model>, Whatever> {
     let html = Html::parse_document(html.as_ref());
     let tag_table = get_selector("body section > div > div > div")?;
     let tag_href = get_selector("div > span > a")?;
@@ -93,7 +121,7 @@ fn covert_to_model_tag(html: impl AsRef<str>) -> anyhow::Result<Vec<Model>> {
     Ok(models)
 }
 
-fn convert_to_model_summary(html: impl AsRef<str>) -> anyhow::Result<(String, String)> {
+fn convert_to_model_summary(html: impl AsRef<str>) -> Result<(String, String), Whatever> {
     let html = Html::parse_document(html.as_ref());
     let summary = get_selector("#summary-content")?;
     let readme = get_selector("#readme #display")?;
@@ -110,7 +138,9 @@ fn convert_to_model_summary(html: impl AsRef<str>) -> anyhow::Result<(String, St
     Ok((summary, readme))
 }
 
-pub(crate) fn convert_to_model_infos(html: impl AsRef<str>) -> anyhow::Result<VecDeque<ModelInfo>> {
+pub(crate) fn convert_to_model_infos(
+    html: impl AsRef<str>,
+) -> Result<VecDeque<ModelInfo>, Whatever> {
     let html = Html::parse_document(html.as_ref());
     let li_selector = get_selector("div#repo > ul li a")?;
     let title_selector = get_selector("div [x-test-model-title]")?;
@@ -162,8 +192,10 @@ pub(crate) fn convert_to_model_infos(html: impl AsRef<str>) -> anyhow::Result<Ve
     Ok(models)
 }
 
-fn get_selector(str: &str) -> anyhow::Result<Selector> {
-    Selector::parse(str).map_err(|err| anyhow!("Failed to create the selector, err: {err}"))
+fn get_selector(selector_str: &'static str) -> Result<Selector, Whatever> {
+    let selector =
+        Selector::parse(selector_str).with_whatever_context(|_| "Failed to get the selector")?;
+    Ok(selector)
 }
 
 fn extract_text(el: &ElementRef, selector: &Selector) -> Option<String> {

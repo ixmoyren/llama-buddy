@@ -1,33 +1,33 @@
-use crate::error::ConfigError;
+use crate::config::ConfigError::NotInterpret;
 use clap::{Args, ValueEnum};
 use http_extra::retry::strategy::{ExponentialBackoff, FibonacciBackoff, FixedInterval};
 use llama_buddy_macro::IndexByField;
 use reqwest::{Client as ReqwestClient, Proxy};
 use serde::{Deserialize, Serialize};
+use snafu::prelude::*;
 use std::{
     collections::VecDeque,
     env,
     env::VarError,
-    fs::{create_dir_all, File, OpenOptions},
+    fs::{File, OpenOptions, create_dir_all},
     io::{Read, Write},
     path::{Path, PathBuf},
     thread,
     time::Duration,
 };
 use sys_extra::dir::BaseDirs;
-use toml_edit::{value, DocumentMut, Table};
+use toml_edit::{DocumentMut, Table, value};
 use url::Url;
 
 const LLAMA_BUDDY_CONFIG: &str = include_str!("llama-buddy.toml");
 
-pub async fn output() -> anyhow::Result<()> {
+pub async fn output() {
     let mut config = Config::default();
-    let base = BaseDirs::new()?;
+    let base = BaseDirs::new().expect("Couldn't get the base dir from os");
     let data_path = base.data_dir().join("llama-buddy");
     config.data.path = data_path;
-    let config_toml = config.display()?;
+    let config_toml = config.display().expect("Couldn't get the config");
     println!("{config_toml}");
-    Ok(())
 }
 
 /// 配置
@@ -36,6 +36,32 @@ pub struct Config {
     pub data: Data,
     pub registry: Registry,
     pub model: Model,
+}
+
+#[derive(Debug, Snafu)]
+pub enum ConfigError {
+    #[snafu(display("{message}"))]
+    IoOperation {
+        message: String,
+        source: std::io::Error,
+    },
+    #[snafu(display("Failed to deserialize file to config obj"))]
+    Deserialize { source: toml_edit::de::Error },
+    #[snafu(display("The path must be file"))]
+    NotDir,
+    #[snafu(display("Empty string isn't allowed"))]
+    NotAllowedEmptyStr,
+    #[snafu(display("Couldn't get the base dir from os"))]
+    NotBaseDir { source: sys_extra::dir::Error },
+    #[snafu(display("Couldn't interpret {key}"))]
+    NotInterpret { key: String, source: VarError },
+    #[snafu(display("Couldn't set proxy({proxy}) in reqwest client"))]
+    ReqwestSetProxy {
+        proxy: String,
+        source: reqwest::Error,
+    },
+    #[snafu(display("Could't build reqwest client"))]
+    ReqwestBuildClient { source: reqwest::Error },
 }
 
 impl Default for Config {
@@ -228,27 +254,41 @@ impl Config {
     }
 
     pub fn read_from_toml(path: &Path) -> Result<Config, ConfigError> {
-        let mut file = File::open(path)?;
+        let mut file = File::open(path).context(IoOperationSnafu {
+            message: format!(
+                "Failed to open the config file, in the path({})",
+                path.display()
+            ),
+        })?;
         let mut config = String::new();
-        file.read_to_string(&mut config)?;
+        file.read_to_string(&mut config).context(IoOperationSnafu {
+            message: "Failed to read the config file",
+        })?;
 
-        let config = toml_edit::de::from_str::<Config>(config.as_str())?;
+        let config =
+            toml_edit::de::from_str::<Config>(config.as_str()).context(DeserializeSnafu)?;
         Ok(config)
     }
 
     pub fn write_to_toml(&self, path: &Path) -> Result<(), ConfigError> {
-        if path.exists() && path.is_dir() {
-            return Err(ConfigError::NotDir);
-        }
+        ensure!(path.exists() && path.is_file(), NotDirSnafu);
         let mut file = OpenOptions::new()
             .create(true)
             .read(true)
             .write(true)
             .truncate(true)
-            .open(path)?;
+            .open(path)
+            .context(IoOperationSnafu {
+                message: format!(
+                    "Failed to open the config file for changing, in the path({})?",
+                    path.display()
+                ),
+            })?;
         let config_toml = self.display()?;
-        file.write_all(config_toml.as_bytes())?;
-        Ok(())
+        file.write_all(config_toml.as_bytes())
+            .context(IoOperationSnafu {
+                message: "Failed to write all config to file".to_owned(),
+            })
     }
 
     // 从环境变量中获取配置文件路径，并且转换成 Config
@@ -258,21 +298,22 @@ impl Config {
         let key = "LLAMA_BUDDY_CONFIG_PATH";
         match env::var(key) {
             Ok(val) => {
-                if val.is_empty() {
-                    return Err(ConfigError::NotAllowedEmptyStr);
-                }
+                ensure!(!val.is_empty(), NotAllowedEmptyStrSnafu);
                 let path = PathBuf::from(val);
-                if path.exists() && path.is_dir() {
-                    return Err(ConfigError::NotDir);
-                }
+                ensure!(path.exists() && path.is_file(), NotDirSnafu);
                 let config = Config::read_from_toml(&path)?;
                 Ok((config, path))
             }
             Err(VarError::NotPresent) => {
-                let base = BaseDirs::new()?;
+                let base = BaseDirs::new().context(NotBaseDirSnafu)?;
                 let config_dir = base.config_dir().join("llama-buddy");
                 if !config_dir.exists() {
-                    create_dir_all(config_dir.as_path())?;
+                    create_dir_all(config_dir.as_path()).context(IoOperationSnafu {
+                        message: format!(
+                            "Failed to create dir, in the path({})",
+                            config_dir.display()
+                        ),
+                    })?;
                 }
                 let path = config_dir.join("llama-buddy.toml");
                 let config = if !path.exists() {
@@ -286,9 +327,9 @@ impl Config {
                 };
                 Ok((config, path))
             }
-            Err(error) => Err(ConfigError::NotInterpret {
+            Err(error) => Err(NotInterpret {
                 key: key.to_owned(),
-                error,
+                source: error,
             }),
         }
     }
@@ -426,7 +467,7 @@ impl HttpClient {
         let client_build = if let Some(p) = self.proxy.clone()
             && !p.is_empty()
         {
-            let p = Proxy::all(p)?;
+            let p = Proxy::all(&p).context(ReqwestSetProxySnafu { proxy: p })?;
             client_build.proxy(p)
         } else {
             client_build
@@ -436,7 +477,7 @@ impl HttpClient {
         } else {
             client_build
         };
-        let client = client_build.build()?;
+        let client = client_build.build().context(ReqwestBuildClientSnafu)?;
         Ok(client)
     }
 

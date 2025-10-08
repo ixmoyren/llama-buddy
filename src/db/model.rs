@@ -1,5 +1,6 @@
 use http_extra::sha256::digest;
 use rusqlite::{Connection, Transaction};
+use snafu::{Whatever, prelude::*};
 use std::{
     collections::HashMap,
     time::{SystemTime, UNIX_EPOCH},
@@ -93,35 +94,50 @@ pub(crate) struct Model {
     pub(crate) hash: String,
 }
 
-pub fn save_library_to_library_raw_data(conn: &Connection, html: String) -> anyhow::Result<bool> {
-    let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as i64;
+pub fn save_library_to_library_raw_data(conn: &Connection, html: String) -> Result<bool, Whatever> {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .with_whatever_context(
+            |_| "Failed to get system time when save library to library raw data",
+        )?
+        .as_secs() as i64;
     let digest = digest(html.as_bytes());
     let href = "/library?sort=newest";
-    conn.execute(INSERT_INTO_LIBRARY_RAW_DATA, (&href, &digest, &html, &now))?;
+    conn.execute(INSERT_INTO_LIBRARY_RAW_DATA, (&href, &digest, &html, &now))
+        .with_whatever_context(|_| "Failed insert into library raw data")?;
     Ok(true)
 }
 
 pub fn query_model_title_and_model_info(
     conn: &Connection,
-) -> anyhow::Result<HashMap<String, String>> {
+) -> Result<HashMap<String, String>, Whatever> {
     let mut map = HashMap::<String, String>::new();
-    let mut statement = conn.prepare(QUERY_MODEL_TITLE_AND_RAW_DIGEST)?;
-    let rows = statement.query_map([], |row| {
-        let title = row.get::<_, String>(0)?;
-        let raw_digest = row.get::<_, String>(1)?;
-        Ok((title, raw_digest))
-    })?;
+    let mut statement = conn
+        .prepare(QUERY_MODEL_TITLE_AND_RAW_DIGEST)
+        .with_whatever_context(|_| "Failed to prepare query model title and model info")?;
+    let rows = statement
+        .query_map([], |row| {
+            let title = row.get::<_, String>(0)?;
+            let raw_digest = row.get::<_, String>(1)?;
+            Ok((title, raw_digest))
+        })
+        .with_whatever_context(|_| "Failed to query model title and model info")?;
     for row in rows {
-        let (title, raw_digest) = row?;
+        let (title, raw_digest) = row.with_whatever_context(|_| "Failed to get row")?;
         map.insert(title, raw_digest);
     }
     Ok(map)
 }
 
-pub fn insert_model_info(conn: &mut Connection, info: ModelInfo) -> anyhow::Result<bool> {
+pub fn insert_model_info(conn: &mut Connection, info: ModelInfo) -> Result<bool, Whatever> {
     // 开启一个事务
-    let tx = conn.transaction()?;
-    let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as i64;
+    let tx = conn
+        .transaction()
+        .with_whatever_context(|_| "Failed to start transaction when insert model info")?;
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .with_whatever_context(|_| "Failed to get system time when insert model info")?
+        .as_secs() as i64;
     let model_id = Uuid::now_v7();
     let result = tx.execute(
         INSERT_INTO_MODEL_INFO,
@@ -184,7 +200,7 @@ pub fn insert_model_info(conn: &mut Connection, info: ModelInfo) -> anyhow::Resu
             (&now,),
         );
     match result {
-        Ok(_) => tx.commit()?,
+        Ok(_) => tx.commit().with_whatever_context(|_| "Commit failed")?,
         Err(err) => {
             error!("Update config set 'insert_model_info_completed' failed, err is {err}");
             return rollback_and_return(tx);
@@ -194,7 +210,7 @@ pub fn insert_model_info(conn: &mut Connection, info: ModelInfo) -> anyhow::Resu
     Ok(true)
 }
 
-fn rollback_and_return(tx: Transaction) -> anyhow::Result<bool> {
-    tx.rollback()?;
+fn rollback_and_return(tx: Transaction) -> Result<bool, Whatever> {
+    tx.rollback().with_whatever_context(|_| "Rollback failed")?;
     Ok(false)
 }
