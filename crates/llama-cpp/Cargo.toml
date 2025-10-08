@@ -11,7 +11,7 @@ name = "llama_cpp"
 path = "src/lib.rs"
 
 [dependencies]
-enumflags2 = "0.7"
+enumflags2 = { version = "0.7", features = ["std"] }
 llama-cpp-sys = { path = "../llama-cpp-sys", optional = true }
 tracing = { workspace = true }
 thiserror = { workspace = true }

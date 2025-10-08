@@ -1,10 +1,10 @@
 mod data;
 mod logit_bias;
 
-use crate::error::TokenTypeConversionError;
 pub use data::{TokenData, TokenDataVec};
-use enumflags2::{BitFlags, bitflags};
+use enumflags2::{BitFlags, FromBitsError, bitflags};
 pub use logit_bias::LogitBias;
+use snafu::prelude::*;
 use std::{
     fmt::Display,
     ops::{Deref, DerefMut},
@@ -14,6 +14,15 @@ use std::{
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct Token(llama_cpp_sys::llama_token);
+
+#[derive(Debug, Snafu)]
+pub enum TokenError {
+    #[snafu(display("Unknown value {value}"))]
+    UnknownValue {
+        value: std::ffi::c_uint,
+        source: FromBitsError<TokenAttr>,
+    },
+}
 
 impl Token {
     #[must_use]
@@ -73,11 +82,11 @@ impl DerefMut for TokenAttrs {
 }
 
 impl TryFrom<llama_cpp_sys::llama_token_type> for TokenAttrs {
-    type Error = TokenTypeConversionError;
+    type Error = TokenError;
 
     fn try_from(value: llama_cpp_sys::llama_token_type) -> Result<Self, Self::Error> {
-        Ok(Self(BitFlags::from_bits(value as _).map_err(|e| {
-            TokenTypeConversionError::UnknownValue(e.invalid_bits())
-        })?))
+        Ok(Self(
+            BitFlags::from_bits(value as _).context(UnknownValueSnafu { value })?,
+        ))
     }
 }
