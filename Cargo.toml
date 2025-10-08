@@ -8,17 +8,17 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
-clap = { version = "4.5", features = ["derive", "wrap_help"] }
+clap = { version = "4.5.48", features = ["derive", "wrap_help"] }
 llama-buddy-macro = { path = "crates/llama-buddy-macro" }
 http-extra = { path = "crates/http-extra" }
 reqwest = { version = "0.12", default-features = false, features = ["http2", "macos-system-configuration", "charset", "cookies", "socks", "hickory-dns", "rustls-tls"] }
 rusqlite = { version = "0.37.0", default-features = true, features = ["bundled"] }
 rustyline = { git = "https://github.com/kkawakam/rustyline.git", default-features = true, features = ["derive"] }
 sys-extra = { path = "crates/sys-extra", default-features = false }
-serde = { version = "1.0.226", default-features = false }
+serde = { version = "1.0.228", default-features = false }
 serde_json = { version = "1.0.145", default-features = false }
 snafu = "0.8.9"
-tempfile = "3.22.0"
+tempfile = "3.23.0"
 tracing = "0.1.41"
 tracing-subscriber = "0.3.20"
 tokio = "1"
