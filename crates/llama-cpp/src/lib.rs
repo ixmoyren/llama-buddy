@@ -1,6 +1,11 @@
 use crate::{
-    batch::BatchError, context::ContextError, ggml_numa::StrategyError as GgmlNumaStrategyError,
-    runtime::RuntimeError, token::TokenError, vocabulary::VocabularyTypeError,
+    batch::BatchError,
+    context::ContextError,
+    ggml_numa::StrategyError as GgmlNumaStrategyError,
+    model::{ModelError, TemplateError},
+    runtime::RuntimeError,
+    token::TokenError,
+    vocabulary::VocabularyTypeError,
 };
 use snafu::Snafu;
 
@@ -21,6 +26,10 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub enum Error {
     #[snafu(transparent)]
     Runtime { source: RuntimeError },
+    #[snafu(transparent)]
+    Model { source: ModelError },
+    #[snafu(transparent)]
+    Template { source: TemplateError },
     #[snafu(transparent)]
     Token { source: TokenError },
     #[snafu(transparent)]

@@ -1,6 +1,6 @@
 use crate::{
     context::{Context, ContextParams},
-    error::{LlamaAdapterLoraRemoveError, LlamaAdapterLoraSetError, LlamaModelLoadError},
+    error::{LlamaAdapterLoraRemoveError, LlamaAdapterLoraSetError},
     ggml_numa::Strategy,
     model::{AdapterLora, Model, ModelParams},
     sampler::Sampler,
@@ -35,6 +35,14 @@ pub enum RuntimeError {
         "Can't use sequence embeddings with a model supporting only LLAMA_POOLING_TYPE_NONE"
     ))]
     EmbeddingsNonePoolType,
+    #[snafu(display(
+        "There was a null byte in a provided string, and thus it could not be converted to a C string"
+    ))]
+    ModelLoadNul { source: std::ffi::NulError },
+    #[snafu(display("llama.cpp returned a nullptr"))]
+    ModelLoadNullReturn,
+    #[snafu(display("Could not convert {path:?} to a str"))]
+    ModelLoadPathToStr { path: PathBuf },
 }
 
 impl Runtime {
@@ -135,18 +143,18 @@ impl Runtime {
         &self,
         path: impl AsRef<Path>,
         params: &ModelParams,
-    ) -> Result<Model, LlamaModelLoadError> {
+    ) -> Result<Model, RuntimeError> {
         let path = path.as_ref();
         debug_assert!(
             path.exists() && path.is_file(),
             "{path:?} does not exist or not a file"
         );
         let path = path.as_os_str().as_encoded_bytes();
-        let path = CString::new(path)?;
+        let path = CString::new(path).context(ModelLoadNulSnafu)?;
         let llama_model =
             unsafe { llama_cpp_sys::llama_model_load_from_file(path.as_ptr(), params.raw()) };
 
-        let model = NonNull::new(llama_model).ok_or(LlamaModelLoadError::NullReturn)?;
+        let model = NonNull::new(llama_model).context(ModelLoadNullReturnSnafu)?;
 
         tracing::debug!(?path, "Loaded model");
         Ok(model.into())
@@ -160,7 +168,7 @@ impl Runtime {
         &self,
         path: Vec<PathBuf>,
         params: &ModelParams,
-    ) -> Result<Model, LlamaModelLoadError> {
+    ) -> Result<Model, RuntimeError> {
         debug_assert!(path.is_empty(), "path is empty");
         let mut path_ptrs = path
             .iter()
@@ -175,7 +183,7 @@ impl Runtime {
             llama_cpp_sys::llama_model_load_from_splits(path_ptrs.as_mut_ptr(), len, params.raw())
         };
 
-        let model = NonNull::new(llama_model).ok_or(LlamaModelLoadError::NullReturn)?;
+        let model = NonNull::new(llama_model).context(ModelLoadNullReturnSnafu)?;
 
         tracing::debug!(?path, "Loaded model");
         Ok(model.into())

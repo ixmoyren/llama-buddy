@@ -7,16 +7,14 @@ pub use lora::*;
 pub use params::*;
 
 use crate::{
-    error::{
-        ApplyChatTemplateError, ChatTemplateError, LlamaAdapterLoraInitError,
-        StringConversionError, TokenConversionError,
-    },
+    error::LlamaAdapterLoraInitError,
     token::{Token, TokenAttr, TokenAttrs},
     vocabulary::Vocabulary,
 };
+use snafu::{ResultExt, Snafu, ensure};
 use std::{
     ffi::{CStr, CString},
-    num::NonZeroU16,
+    num::{NonZeroU16, TryFromIntError},
     ops::{Deref, DerefMut},
     os::raw::{c_char, c_int},
     path::Path,
@@ -31,6 +29,38 @@ use std::{
 pub struct Model {
     // 需要保证字段指向的指针不是空指针，明确必须指向有效的内存位置
     raw: NonNull<llama_cpp_sys::llama_model>,
+}
+
+#[derive(Debug, Snafu)]
+pub enum ModelError {
+    #[snafu(display("The supplied bytes contain an internal 0 byte"))]
+    TokenConversionContainZeroByte { source: std::ffi::NulError },
+    #[snafu(display("Unknown Token Type"))]
+    TokenConversionUnknownType,
+    #[snafu(display("The original CString cannot be converted to str"))]
+    TokenCannotCovertToUtf8 { source: std::str::Utf8Error },
+    #[snafu(display("Insufficient Buffer Space, {value}"))]
+    TokenCannotInsufficientBufferSpace { value: i32 },
+    #[snafu(display("The buffer size({from}) is positive and fits into usize"))]
+    TokenConversionI32IntoUsize { from: i32, source: TryFromIntError },
+    #[snafu(display("The buffer size({from}) is positive and fits into i32"))]
+    TokenConversionUsizeIntoI32 {
+        from: usize,
+        source: TryFromIntError,
+    },
+    #[snafu(display("The original bytes cannot be converted to str"))]
+    TokenCannotCovertToString { source: std::string::FromUtf8Error },
+    #[snafu(display("The supplied str contain an internal 0 byte"))]
+    TokenizeContainZeroByte { source: std::ffi::NulError },
+    #[snafu(display("The value({from}) is positive and fits into i32"))]
+    TokenizeUsizeIntoI32 {
+        from: usize,
+        source: TryFromIntError,
+    },
+    #[snafu(display("The value({from}) is positive and fits into usize"))]
+    TokenizeI32IntoUsize { from: i32, source: TryFromIntError },
+    #[snafu(display("The original bytes cannot be converted to str"))]
+    TokenizeToString { source: std::string::FromUtf8Error },
 }
 
 unsafe impl Send for Model {}
@@ -56,7 +86,7 @@ impl Model {
     pub fn tokens(
         &self,
         special: Special,
-    ) -> impl Iterator<Item = (Token, Result<String, TokenConversionError>)> + '_ {
+    ) -> impl Iterator<Item = (Token, Result<String, ModelError>)> + '_ {
         let vocab = self.vocab();
         let quantity = vocab.token_quantity();
         (0..quantity)
@@ -69,33 +99,24 @@ impl Model {
         unsafe { llama_cpp_sys::llama_model_decoder_start_token(self.raw.as_ptr()) }.into()
     }
 
-    pub fn token_to_str(
-        &self,
-        token: Token,
-        special: Special,
-    ) -> Result<String, TokenConversionError> {
+    pub fn token_to_str(&self, token: Token, special: Special) -> Result<String, ModelError> {
         let bytes = self.token_to_bytes(token, special)?;
-        Ok(String::from_utf8(bytes)?)
+        Ok(String::from_utf8(bytes).context(TokenizeToStringSnafu)?)
     }
 
-    pub fn token_to_bytes(
-        &self,
-        token: Token,
-        special: Special,
-    ) -> Result<Vec<u8>, TokenConversionError> {
+    pub fn token_to_bytes(&self, token: Token, special: Special) -> Result<Vec<u8>, ModelError> {
         match self.token_to_bytes_with_size(token, 8, special, None) {
-            Err(TokenConversionError::InsufficientBufferSpace(i)) => {
-                self.token_to_bytes_with_size(token, (-i).try_into()?, special, None)
+            Err(ModelError::TokenCannotInsufficientBufferSpace { value }) => {
+                let size = value
+                    .try_into()
+                    .context(TokenizeI32IntoUsizeSnafu { from: value })?;
+                self.token_to_bytes_with_size(token, size, special, None)
             }
             x => x,
         }
     }
 
-    pub fn tokens_to_str(
-        &self,
-        tokens: &[Token],
-        special: Special,
-    ) -> Result<String, TokenConversionError> {
+    pub fn tokens_to_str(&self, tokens: &[Token], special: Special) -> Result<String, ModelError> {
         let mut builder: Vec<u8> = Vec::with_capacity(tokens.len() * 4);
         for piece in tokens
             .iter()
@@ -104,37 +125,35 @@ impl Model {
         {
             builder.extend_from_slice(&piece?);
         }
-        Ok(String::from_utf8(builder)?)
+        Ok(String::from_utf8(builder).context(TokenizeToStringSnafu)?)
     }
 
-    pub fn str_to_token(
-        &self,
-        str: &str,
-        add_bos: AddBos,
-    ) -> Result<Vec<Token>, StringConversionError> {
-        let add_bos = match add_bos {
-            AddBos::Always => true,
-            AddBos::Never => false,
-        };
+    pub fn str_to_token(&self, str: &str, add_bos: AddBos) -> Result<Vec<Token>, ModelError> {
+        let add_bos = matches!(add_bos, AddBos::Always);
 
         let tokens_estimation = std::cmp::max(8, (str.len() / 2) + usize::from(add_bos));
         let mut buffer: Vec<Token> = Vec::with_capacity(tokens_estimation);
+        let buffer_capacity = buffer
+            .capacity()
+            .try_into()
+            .context(TokenizeUsizeIntoI32Snafu {
+                from: buffer.capacity(),
+            })?;
 
-        let c_string = CString::new(str)?;
-        let buffer_capacity = c_int::try_from(buffer.capacity()).map_err(|_| {
-            StringConversionError::BufferCapacity(
-                "Buffer capacity should fit into a c_int".to_owned(),
-            )
-        })?;
+        let text = CString::new(str).context(TokenizeContainZeroByteSnafu)?;
+        let text_len = text.as_bytes().len();
+        let text_len = text_len
+            .try_into()
+            .context(TokenizeUsizeIntoI32Snafu { from: text_len })?;
 
         let vocab = self.vocab();
 
         let size = unsafe {
             llama_cpp_sys::llama_tokenize(
                 vocab.raw_mut(),
-                c_string.as_ptr(),
-                c_int::try_from(c_string.as_bytes().len())?,
-                buffer.as_mut_ptr().cast::<llama_cpp_sys::llama_token>(),
+                text.as_ptr(),
+                text_len,
+                buffer.as_mut_ptr().cast::<_>(),
                 buffer_capacity,
                 add_bos,
                 true,
@@ -142,15 +161,16 @@ impl Model {
         };
 
         let size = if size.is_negative() {
-            buffer.reserve_exact(usize::try_from(-size).map_err(|_| {
-                StringConversionError::BufferCapacity("value is too larger".to_owned())
-            })?);
+            let add = (-size)
+                .try_into()
+                .context(TokenizeI32IntoUsizeSnafu { from: -size })?;
+            buffer.reserve_exact(add);
             unsafe {
                 llama_cpp_sys::llama_tokenize(
                     self.vocab().raw_mut(),
-                    c_string.as_ptr(),
-                    c_int::try_from(c_string.as_bytes().len())?,
-                    buffer.as_mut_ptr().cast::<llama_cpp_sys::llama_token>(),
+                    text.as_ptr(),
+                    text_len,
+                    buffer.as_mut_ptr().cast::<_>(),
                     -size,
                     add_bos,
                     true,
@@ -160,9 +180,9 @@ impl Model {
             size
         };
 
-        let size = usize::try_from(size).map_err(|_| {
-            StringConversionError::BufferCapacity("Size is positive and usize".to_owned())
-        })?;
+        let size = size
+            .try_into()
+            .context(TokenizeI32IntoUsizeSnafu { from: size })?;
         unsafe { buffer.set_len(size) }
         Ok(buffer)
     }
@@ -180,9 +200,9 @@ impl Model {
         token: Token,
         buffer_size: usize,
         special: Special,
-    ) -> Result<String, TokenConversionError> {
+    ) -> Result<String, ModelError> {
         let bytes = self.token_to_bytes_with_size(token, buffer_size, special, None)?;
-        Ok(String::from_utf8(bytes)?)
+        Ok(String::from_utf8(bytes).context(TokenCannotCovertToStringSnafu)?)
     }
 
     pub fn token_to_bytes_with_size(
@@ -191,7 +211,7 @@ impl Model {
         buffer_size: usize,
         special: Special,
         lstrip: Option<NonZeroU16>,
-    ) -> Result<Vec<u8>, TokenConversionError> {
+    ) -> Result<Vec<u8>, ModelError> {
         let vocab = self.vocab();
         if token == vocab.token_nl() {
             return Ok(b"\n".to_vec());
@@ -206,14 +226,14 @@ impl Model {
             return Ok(Vec::new());
         }
 
-        let special = match special {
-            Special::Tokenize => true,
-            Special::Plaintext => false,
-        };
+        let special = matches!(special, Special::Tokenize);
 
-        let string = CString::new(vec![b'*'; buffer_size]).expect("no null");
+        let string =
+            CString::new(vec![b'*'; buffer_size]).context(TokenConversionContainZeroByteSnafu)?;
         let len = string.as_bytes().len();
-        let len = c_int::try_from(len).expect("length fits into c_int");
+        let len = len
+            .try_into()
+            .context(TokenConversionUsizeIntoI32Snafu { from: len })?;
         let buf = string.into_raw();
         let lstrip = lstrip.map_or(0, |it| i32::from(it.get()));
         let size = unsafe {
@@ -228,12 +248,15 @@ impl Model {
         };
 
         match size {
-            0 => Err(TokenConversionError::UnknownType),
-            i if i.is_negative() => Err(TokenConversionError::InsufficientBufferSpace(i)),
+            0 => Err(ModelError::TokenConversionUnknownType),
+            i if i.is_negative() => {
+                Err(ModelError::TokenCannotInsufficientBufferSpace { value: i })
+            }
             size => {
                 let string = unsafe { CString::from_raw(buf) };
                 let mut bytes = string.into_bytes();
-                let len = usize::try_from(size).expect("size is positive and fits into usize");
+                let len = usize::try_from(size)
+                    .context(TokenConversionI32IntoUsizeSnafu { from: size })?;
                 bytes.truncate(len);
                 Ok(bytes)
             }
@@ -280,7 +303,7 @@ impl Model {
         }
     }
 
-    fn chat_template_impl(&self, capacity: usize) -> Result<Template, ChatTemplateError> {
+    fn chat_template_impl(&self, capacity: usize) -> Result<Template, TemplateError> {
         let mut chat_temp = vec![b'*'; capacity];
         let chat_name = c"tokenizer.chat_template";
 
@@ -293,15 +316,17 @@ impl Model {
             )
         };
 
-        if ret < 0 {
-            return Err(ChatTemplateError::MissingTemplate(ret));
-        }
+        ensure!(ret >= 0, MissingTemplateSnafu { code: ret });
 
         let returned_len = ret as usize;
 
-        if ret as usize >= capacity {
-            return Err(ChatTemplateError::RetryWithLargerBuffer(returned_len));
-        }
+        ensure!(
+            returned_len < capacity,
+            TemplateRetryWithLargerBufferSnafu {
+                size: returned_len,
+                capacity
+            }
+        );
 
         assert_eq!(
             chat_temp.get(returned_len),
@@ -316,25 +341,28 @@ impl Model {
         Ok(template.into())
     }
 
-    pub fn chat_template_by_meta(&self) -> Result<Template, ChatTemplateError> {
+    pub fn chat_template_by_meta(&self) -> Result<Template, TemplateError> {
         match self.chat_template_impl(200) {
             Ok(t) => Ok(t),
-            Err(ChatTemplateError::RetryWithLargerBuffer(actual_len)) => {
-                match self.chat_template_impl(actual_len + 1) {
-                    Ok(t) => Ok(t),
-                    Err(ChatTemplateError::RetryWithLargerBuffer(unexpected_len)) => panic!(
-                        "Was told that the template length was {actual_len} but now it's {unexpected_len}"
-                    ),
-                    Err(e) => Err(e),
-                }
-            }
+            Err(TemplateError::TemplateRetryWithLargerBuffer {
+                size: actual_len, ..
+            }) => match self.chat_template_impl(actual_len + 1) {
+                Ok(t) => Ok(t),
+                Err(TemplateError::TemplateRetryWithLargerBuffer {
+                    size: unexpected_len,
+                    ..
+                }) => panic!(
+                    "Was told that the template length was {actual_len} but now it's {unexpected_len}"
+                ),
+                Err(e) => Err(e),
+            },
             Err(e) => Err(e),
         }
     }
 
-    pub fn chat_template(&self, name: Option<String>) -> Result<Template, ChatTemplateError> {
+    pub fn chat_template(&self, name: Option<String>) -> Result<Template, TemplateError> {
         let key = if let Some(name) = name {
-            let c_str = CString::new(name)?;
+            let c_str = CString::new(name).context(TemplateContainZeroByteSnafu)?;
             c_str.as_ptr()
         } else {
             ptr::null() as *const c_char
@@ -342,9 +370,7 @@ impl Model {
 
         let c_str_ptr = unsafe { llama_cpp_sys::llama_model_chat_template(self.raw_mut(), key) };
 
-        if c_str_ptr.is_null() {
-            return Err(ChatTemplateError::NulTemplate);
-        }
+        ensure!(!c_str_ptr.is_null(), NulTemplateSnafu);
 
         let c_str = unsafe { CStr::from_ptr(c_str_ptr) };
 
@@ -380,7 +406,7 @@ impl Model {
         template: &Template,
         chats: &[Message],
         add_ass: bool,
-    ) -> Result<String, ApplyChatTemplateError> {
+    ) -> Result<String, TemplateError> {
         // 预设缓冲区长度为全部信息字符长度的两倍
         let message_length = chats.iter().fold(0, |acc, c| {
             acc + c.role.to_bytes().len() + c.content.to_bytes().len()
@@ -392,7 +418,8 @@ impl Model {
             .map(Into::into)
             .collect::<Vec<llama_cpp_sys::llama_chat_message>>();
         let tmpl_ptr = template.as_ptr();
-        let buff_len = i32::try_from(buff.len())?;
+        let buff_len =
+            i32::try_from(buff.len()).context(TemplateUsizeIntoI32Snafu { from: buff.len() })?;
         let res = unsafe {
             llama_cpp_sys::llama_chat_apply_template(
                 tmpl_ptr,
@@ -405,15 +432,18 @@ impl Model {
         };
 
         // 从 llama-cpp 中可知返回 -1 是遇到了无法处理的的模板类型
-        if res == -1 {
-            return Err(ApplyChatTemplateError::UnknownTemplate);
-        }
+        ensure!(res != -1, UnknownTemplateSnafu);
 
         // 缓冲区过小，结果有被截断，重新申请一个缓冲区，重新调用 llama_chat_apply_template 方法
         if res > buff_len {
-            let new_len =
-                usize::try_from(res).map_err(|_| ApplyChatTemplateError::ResUnreasonable)?;
+            let new_len = res
+                .try_into()
+                .context(TemplateI32IntoUsizeSnafu { from: res })?;
             buff.resize(new_len, 0_u8);
+            let buff_len = buff
+                .len()
+                .try_into()
+                .context(TemplateUsizeIntoI32Snafu { from: buff.len() })?;
             let _res = unsafe {
                 llama_cpp_sys::llama_chat_apply_template(
                     tmpl_ptr,
@@ -421,15 +451,17 @@ impl Model {
                     chats.len(),
                     add_ass,
                     buff.as_mut_ptr() as *mut c_char,
-                    buff.len().try_into()?,
+                    buff_len,
                 )
             };
         }
 
-        let len = usize::try_from(res).map_err(|_| ApplyChatTemplateError::ResUnreasonable)?;
+        let len = res
+            .try_into()
+            .context(TemplateI32IntoUsizeSnafu { from: res })?;
         buff.truncate(len);
 
-        Ok(String::from_utf8(buff)?)
+        Ok(String::from_utf8(buff).context(TemplateCannotCovertToStringSnafu)?)
     }
 }
 
