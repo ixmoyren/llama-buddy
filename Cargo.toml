@@ -8,7 +8,7 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
-clap = { version = "4.5.48", features = ["derive", "wrap_help"] }
+clap = { version = "4.5.51", features = ["derive", "wrap_help"] }
 llama-buddy-macro = { path = "crates/llama-buddy-macro" }
 http-extra = { path = "crates/http-extra" }
 reqwest = { version = "0.12", default-features = false, features = ["http2", "macos-system-configuration", "charset", "cookies", "socks", "hickory-dns", "rustls-tls"] }
@@ -42,7 +42,7 @@ snafu = { workspace = true }
 sys-extra = { workspace = true, features = ["dir", "target"] }
 tempfile = { workspace = true }
 tokio = { workspace = true }
-toml_edit = { version = "0.23.6", features = ["serde"] }
+toml_edit = { version = "0.23.7", features = ["serde"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 url = { version = "2.5.7", default-features = false, features = ["serde"] }
