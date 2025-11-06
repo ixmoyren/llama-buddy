@@ -10,6 +10,7 @@ use crate::cmd::{
     config::output,
     init::{InitArgs, init_local_registry},
     pull::{PullArgs, pull_model_from_registry},
+    update::{UpdateArgs, update_local_registry},
 };
 use clap::{
     Parser, Subcommand,
@@ -39,6 +40,8 @@ enum Commands {
     Init(InitArgs),
     #[command(about = "Pull model from registry")]
     Pull(PullArgs),
+    #[command(about = "Update local registry")]
+    Update(UpdateArgs),
 }
 
 #[tokio::main]
@@ -50,5 +53,6 @@ async fn main() {
         Commands::Config => output().await,
         Commands::Init(args) => init_local_registry(args).await,
         Commands::Pull(args) => pull_model_from_registry(args).await,
+        Commands::Update(args) => update_local_registry(args).await,
     }
 }

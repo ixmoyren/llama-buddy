@@ -19,6 +19,28 @@ use tokio::sync::Mutex;
 use tracing::{debug, error};
 use url::Url;
 
+pub(crate) async fn try_update_model_info(
+    conn: Arc<Mutex<Connection>>,
+    client: Client,
+    remote_registry: Url,
+) -> Result<(), Whatever> {
+    match save_model_info(Arc::clone(&conn), client, remote_registry).await {
+        Ok(_) => completed_update_model_info(Arc::clone(&conn), CompletedStatus::Completed).await,
+        Err(error) => {
+            error!("Failed to update model info, {error:?}");
+            completed_update_model_info(Arc::clone(&conn), CompletedStatus::Failed).await
+        }
+    }
+}
+
+pub(crate) async fn completed_update_model_info(
+    conn: Arc<Mutex<Connection>>,
+    completed_status: CompletedStatus,
+) -> Result<(), Whatever> {
+    let conn = conn.lock().await;
+    db::completed_update_model_info(&conn, completed_status)
+}
+
 pub(crate) async fn try_save_model_info(
     conn: Arc<Mutex<Connection>>,
     client: Client,
@@ -28,13 +50,9 @@ pub(crate) async fn try_save_model_info(
         return Ok(());
     }
     match save_model_info(Arc::clone(&conn), client, remote_registry).await {
-        Ok(_) => {
-            completed_insert_model_info_completed(Arc::clone(&conn), CompletedStatus::Completed)
-                .await
-        }
+        Ok(_) => completed_insert_model_info(Arc::clone(&conn), CompletedStatus::Completed).await,
         Err(error) => {
-            completed_insert_model_info_completed(Arc::clone(&conn), CompletedStatus::Failed)
-                .await?;
+            completed_insert_model_info(Arc::clone(&conn), CompletedStatus::Failed).await?;
             Err(error)
         }
     }
@@ -47,12 +65,12 @@ pub(crate) async fn check_insert_model_info_completed(
     db::check_insert_model_info_completed(&conn)
 }
 
-pub(crate) async fn completed_insert_model_info_completed(
+pub(crate) async fn completed_insert_model_info(
     conn: Arc<Mutex<Connection>>,
     completed_status: CompletedStatus,
 ) -> Result<(), Whatever> {
     let conn = conn.lock().await;
-    db::completed_insert_model_info_completed(&conn, completed_status)
+    db::completed_insert_model_info(&conn, completed_status)
 }
 
 pub(crate) async fn save_model_info(

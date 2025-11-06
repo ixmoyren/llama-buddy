@@ -58,7 +58,7 @@ pub fn check_insert_model_info_completed(conn: &Connection) -> Result<bool, What
     Ok(init_status == "Completed")
 }
 
-pub fn completed_insert_model_info_completed(
+pub fn completed_insert_model_info(
     conn: &Connection,
     completed_status: CompletedStatus,
 ) -> Result<(), Whatever> {
@@ -72,14 +72,32 @@ pub fn completed_insert_model_info_completed(
     Ok(())
 }
 
+pub fn completed_update_model_info(
+    conn: &Connection,
+    completed_status: CompletedStatus,
+) -> Result<(), Whatever> {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .with_whatever_context(|_| "Failed to get system time when set init status to completed")?
+        .as_secs();
+    let status = completed_status.as_ref();
+    insert_config(
+        conn,
+        "insert_model_info_completed",
+        status.as_bytes().to_vec(),
+    )
+    .with_whatever_context(|_| "Failed to set init status to completed")?;
+    Ok(())
+}
+
 /// 插入一个新的配置项，如果配置项已经存在，那么则更新这个配置项
 pub fn insert_config(
     conn: &Connection,
-    name: impl ToString,
+    name: impl AsRef<str>,
     value: Vec<u8>,
 ) -> Result<(), Whatever> {
-    let name = name.to_string();
-    conn.execute(INSERT_CONFIG_ITEM, (&name, &value))
+    let name = name.as_ref();
+    conn.execute(INSERT_CONFIG_ITEM, (name, &value))
         .with_whatever_context(|_| "Failed to insert config")?;
     Ok(())
 }

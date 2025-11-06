@@ -8,18 +8,17 @@ use std::{fs, path::PathBuf, sync::Arc};
 use tracing::{error, info};
 use url::Url;
 
-pub async fn init_local_registry(args: InitArgs) {
-    let InitArgs {
+pub async fn update_local_registry(args: UpdateArgs) {
+    let UpdateArgs {
         remote_registry: new_remote,
-        path: new_data_path,
         client: http_client_config,
         saved,
-        force,
+        registry,
         ..
     } = args;
     let (
         LLamaBuddyConfig {
-            data: Data { path },
+            data: Data { path: data_path },
             registry:
                 Registry {
                     remote,
@@ -29,7 +28,6 @@ pub async fn init_local_registry(args: InitArgs) {
         },
         config_path,
     ) = LLamaBuddyConfig::try_config_path().expect("Couldn't get the config");
-    let data_path = new_data_path.unwrap_or(path);
     let client_config = if let Some(new) = http_client_config {
         client_config.merge(new)
     } else {
@@ -39,37 +37,24 @@ pub async fn init_local_registry(args: InitArgs) {
     let client = client_config
         .build_client()
         .expect("Couldn't build reqwest client");
-    // 强制初始化，清理全部的配置文件
-    if force {
-        fs::remove_dir_all(data_path.as_path())
-            .expect("Couldn't remove all dir when force init repo")
-    }
     // 打开数据库文件，创建数据库并且创建配置表、模型信息表
     let sqlite_dir = data_path.join("sqlite");
     let conn =
         service::connection(sqlite_dir, "llama-buddy.sqlite").expect("Couldn't open sqlite file");
-    // 检查一下有没有完成初始化，初始化已经完成，那么直接退出
-    if service::init::check_init_completed(Arc::clone(&conn))
+    // 检查一下有没有完成初始化，没有完成初始化，那么应该在完成初始化之后才能够更新
+    if !service::init::check_init_completed(Arc::clone(&conn))
         .await
         .expect("Couldn't check init whatever completed")
     {
-        info!("Initialization completed");
+        info!("Initialization should be ensured to be completed");
+    } else {
+        // 更新注册表
+        if registry {
+            service::model::try_update_model_info(Arc::clone(&conn), client, remote.clone())
+                .await
+                .expect("Couldn't update model info");
+        }
     }
-    match service::model::try_save_model_info(Arc::clone(&conn), client, remote.clone()).await {
-        Ok(_) => {
-            // 如果成功，那么将初始化状态设置成完成，后续的流程应该以这个状态为准
-            service::init::completed_init(Arc::clone(&conn), CompletedStatus::Completed)
-                .await
-                .expect("Couldn't set init status to completed");
-        }
-        Err(error) => {
-            error!("Failed to try to save model info, {error:?}");
-            // 如果失败，将初始化状态设置为失败
-            service::init::completed_init(Arc::clone(&conn), CompletedStatus::Failed)
-                .await
-                .expect("Couldn't set init status to failed");
-        }
-    };
     // 保存 cli 传入的参数到配置文件中
     if saved {
         let config = LLamaBuddyConfig {
@@ -84,23 +69,17 @@ pub async fn init_local_registry(args: InitArgs) {
             .write_to_toml(config_path.as_path())
             .expect("Failed to write all configs to file");
     }
-    info!("Initialization completed");
+    info!("Update completed");
 }
 
 #[derive(Args)]
-pub struct InitArgs {
+pub struct UpdateArgs {
     #[arg(
         short = 'r',
         long = "remote",
         help = "The remote registry address, the default value is `https://registry.ollama.com/`"
     )]
     pub remote_registry: Option<Url>,
-    #[arg(
-        short = 'p',
-        long = "path",
-        help = "The path where the local registry is located, the default path is `$DATA$/llama-buddy`"
-    )]
-    pub path: Option<PathBuf>,
     #[command(flatten)]
     pub client: Option<HttpClientConfig>,
     #[arg(
@@ -109,9 +88,6 @@ pub struct InitArgs {
         help = "Save the options provided in the command line to a configuration file"
     )]
     pub saved: bool,
-    #[arg(
-        long = "force",
-        help = "Force initialization will clear all information and rebuild the metadata of the registry"
-    )]
-    pub force: bool,
+    #[arg(long = "registry", help = "Update the local registry")]
+    pub registry: bool,
 }
