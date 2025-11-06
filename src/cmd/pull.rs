@@ -36,7 +36,7 @@ pub async fn pull_model_from_registry(args: PullArgs) {
     ) = LLamaBuddyConfig::try_config_path().expect("Couldn't get the config");
     // 如果没有提供模型的版本，使用配置中的默认值
     let category = category.unwrap_or(category_default);
-    let model_prefix = format!("{name}_{category}");
+    let model_prefix = format!("{name}:{category}");
     // 如果没有提供保存目录，那么使用默认目录
     let dir = data_path.join("model").join(model_prefix);
     // 获取下载 Model 时 HTTP client 的配置

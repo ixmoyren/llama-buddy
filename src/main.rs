@@ -42,6 +42,10 @@ enum Commands {
     Pull(PullArgs),
     #[command(about = "Update local registry")]
     Update(UpdateArgs),
+    // 列出可用的模型 list
+    // 展示模型详细信息 show
+    // 查找模型 search
+    // 简单启动模型 simple_run
 }
 
 #[tokio::main]

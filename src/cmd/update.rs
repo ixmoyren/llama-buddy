@@ -6,8 +6,8 @@ use crate::{
     service,
 };
 use clap::Args;
-use std::{fs, path::PathBuf, sync::Arc};
-use tracing::{error, info};
+use std::sync::Arc;
+use tracing::info;
 use url::Url;
 
 pub async fn update_local_registry(args: UpdateArgs) {

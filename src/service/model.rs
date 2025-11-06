@@ -6,7 +6,7 @@ use crate::{
     },
     error::Whatever,
 };
-use http_extra::{client, sha256::digest};
+use http_extra::sha256::digest;
 use reqwest::Client;
 use rusqlite::Connection;
 use scraper::{ElementRef, Html, Selector};
@@ -80,7 +80,7 @@ pub(crate) async fn save_model_info(
 ) -> Result<(), Whatever> {
     let old_model_raw_digest_map = query_model_title_and_model_info(Arc::clone(&conn)).await?;
     let (library_html_sender, library_html_receiver) = tokio::sync::oneshot::channel::<String>();
-    let (model_info_sender, mut model_info_receiver) = tokio::sync::mpsc::channel(256);
+    let (model_info_sender, model_info_receiver) = tokio::sync::mpsc::channel(256);
     // 生产者为从 ollama.com 中获取的全部模型列表的数据
     let send_job = tokio::spawn(send(
         client,
