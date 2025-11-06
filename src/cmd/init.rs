@@ -64,7 +64,7 @@ pub async fn init_local_registry(args: InitArgs) {
                 .expect("Couldn't set init status to completed");
         }
         Err(error) => {
-            error!("Failed to save model info, {error:?}");
+            error!("Failed to try to save model info, {error:?}");
             // 如果失败，将初始化状态设置为失败
             service::init::completed_init(Arc::clone(&conn), CompletedStatus::Failed)
                 .await

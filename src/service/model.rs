@@ -32,7 +32,11 @@ pub(crate) async fn try_save_model_info(
             completed_insert_model_info_completed(Arc::clone(&conn), CompletedStatus::Completed)
                 .await
         }
-        Err(error) => Err(error),
+        Err(error) => {
+            completed_insert_model_info_completed(Arc::clone(&conn), CompletedStatus::Failed)
+                .await?;
+            Err(error)
+        }
     }
 }
 
