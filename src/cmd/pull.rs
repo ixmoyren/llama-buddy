@@ -1,13 +1,14 @@
 //！从远程仓库中拉取模型
 
-use crate::config::{
-    Config as LLamaBuddyConfig, Data, HttpClient as HttpClientConfig, Model, Registry,
+use crate::{
+    config::{Config as LLamaBuddyConfig, Data, HttpClient as HttpClientConfig, Model, Registry},
+    db,
 };
 use clap::Args;
 use http_extra::{download, download::DownloadParam, retry};
 use serde::Deserialize;
 use serde_json::from_str;
-use tracing::debug;
+use tracing::{debug, error};
 
 pub async fn pull_model_from_registry(args: PullArgs) {
     let PullArgs {
@@ -37,6 +38,15 @@ pub async fn pull_model_from_registry(args: PullArgs) {
     // 如果没有提供模型的版本，使用配置中的默认值
     let category = category.unwrap_or(category_default);
     let model_prefix = format!("{name}:{category}");
+    let sqlite_dir = data_path.join("sqlite");
+    let conn = db::open(sqlite_dir, "llama-buddy.sqlite").expect("Couldn't open sqlite file");
+    // 检查一下提供的模型的名字和版本是否存在注册表中
+    if !db::check_model_name(&conn, &model_prefix) {
+        error!(
+            "The provided model name is not in the local registry. Please check the model name or try to update the local registry."
+        );
+        return;
+    }
     // 如果没有提供保存目录，那么使用默认目录
     let dir = data_path.join("model").join(model_prefix);
     // 获取下载 Model 时 HTTP client 的配置

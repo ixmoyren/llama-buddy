@@ -42,9 +42,9 @@ on conflict (name) do update set name       = excluded.name,
                                  hash       = excluded.hash,
                                  updated_at = strftime('%s', 'now');"#;
 
-const QUERY_MODEL_TITLE_AND_RAW_DIGEST: &str = r#"
-select title, raw_digest from model_info;
-"#;
+const QUERY_MODEL_TITLE_AND_RAW_DIGEST: &str = r#"select title, raw_digest from model_info;"#;
+
+const QUERY_MODEL_NAME: &str = r#"select name from model where name = ?1;"#;
 
 // 插入 model 信息
 #[derive(Eq, PartialEq, Clone, Default, Debug)]
@@ -209,6 +209,18 @@ pub fn insert_model_info(conn: &mut Connection, info: ModelInfo) -> Result<bool,
     }
     info!("Insert model info success, title is {}", info.title);
     Ok(true)
+}
+
+pub fn check_model_name(conn: &Connection, name: impl AsRef<str>) -> bool {
+    let name = name.as_ref();
+    let result = conn.query_one(QUERY_MODEL_NAME, [name], |r| r.get::<_, String>(0));
+    match result {
+        Ok(_) => true,
+        Err(error) => {
+            error!("Failed to check model name, {error:?}");
+            false
+        }
+    }
 }
 
 fn rollback_and_return(tx: Transaction) -> Result<bool, Whatever> {
