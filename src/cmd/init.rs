@@ -1,3 +1,5 @@
+//! 初始化本地注册表
+
 use crate::{
     config::{Config as LLamaBuddyConfig, Data, HttpClient as HttpClientConfig, Registry},
     db::{self, CompletedStatus},

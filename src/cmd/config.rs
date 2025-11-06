@@ -1,3 +1,5 @@
+//! 输出默认配置
+
 use crate::config::Config;
 use sys_extra::dir::BaseDirs;
 
