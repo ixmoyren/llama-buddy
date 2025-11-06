@@ -2,7 +2,6 @@
 
 use crate::{
     config::{Config as LLamaBuddyConfig, Data, HttpClient as HttpClientConfig, Registry},
-    db::{self, CompletedStatus},
     service,
 };
 use clap::Args;

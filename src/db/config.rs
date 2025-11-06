@@ -11,7 +11,7 @@ const QUERY_INSERT_MODEL_INFO_COMPLETED: &str =
 
 const SET_INSERT_MODEL_INFO_COMPLETED: &str = "update config set value = cast(?1 as blob), updated_at = (?2) where name = 'insert_model_info_completed'";
 
-const INSERT_CONFIG_ITEM: &str = r#"insert into config (name, value) values (?1, ?2) on conflict (name) do update set value = excluded.value"#;
+const INSERT_CONFIG_ITEM: &str = r#"insert into config (name, value) values (?1, ?2) on conflict (name) do update set value = excluded.value, updated_at = strftime('%s', 'now')"#;
 
 pub enum CompletedStatus {
     NotStarted,
@@ -76,14 +76,10 @@ pub fn completed_update_model_info(
     conn: &Connection,
     completed_status: CompletedStatus,
 ) -> Result<(), Whatever> {
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .with_whatever_context(|_| "Failed to get system time when set init status to completed")?
-        .as_secs();
     let status = completed_status.as_ref();
     insert_config(
         conn,
-        "insert_model_info_completed",
+        "update_model_info_completed",
         status.as_bytes().to_vec(),
     )
     .with_whatever_context(|_| "Failed to set init status to completed")?;
