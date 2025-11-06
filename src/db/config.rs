@@ -1,5 +1,6 @@
+use crate::error::Whatever;
 use rusqlite::Connection;
-use snafu::{Whatever, prelude::*};
+use snafu::prelude::*;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const SET_INIT_STATUS: &str =
@@ -7,6 +8,8 @@ const SET_INIT_STATUS: &str =
 
 const QUERY_INSERT_MODEL_INFO_COMPLETED: &str =
     "select value from config where name = 'insert_model_info_completed'";
+
+const SET_INSERT_MODEL_INFO_COMPLETED: &str = "update config set value = cast(?1 as blob), updated_at = (?2) where name = 'insert_model_info_completed'";
 
 const INSERT_CONFIG_ITEM: &str = r#"insert into config (name, value) values (?1, ?2) on conflict (name) do update set value = excluded.value"#;
 
@@ -53,6 +56,20 @@ pub fn check_insert_model_info_completed(conn: &Connection) -> Result<bool, What
     let init_status = String::from_utf8(init_status)
         .with_whatever_context(|_| "Couldn't convert init_status to string")?;
     Ok(init_status == "Completed")
+}
+
+pub fn completed_insert_model_info_completed(
+    conn: &Connection,
+    completed_status: CompletedStatus,
+) -> Result<(), Whatever> {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .with_whatever_context(|_| "Failed to get system time when set init status to completed")?
+        .as_secs();
+    let status = completed_status.as_ref();
+    conn.execute(SET_INSERT_MODEL_INFO_COMPLETED, (status, &now))
+        .with_whatever_context(|_| "Failed to set init status to completed")?;
+    Ok(())
 }
 
 /// 插入一个新的配置项，如果配置项已经存在，那么则更新这个配置项

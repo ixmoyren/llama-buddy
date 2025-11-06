@@ -1,9 +1,12 @@
+extern crate core;
+
+mod cmd;
 mod config;
 mod db;
-mod init;
-mod pull;
+mod error;
+mod service;
 
-use crate::{
+use crate::cmd::{
     config::output,
     init::{InitArgs, init_local_registry},
     pull::{PullArgs, pull_model_from_registry},

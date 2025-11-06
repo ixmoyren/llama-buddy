@@ -1,6 +1,7 @@
+use crate::error::Whatever;
 use http_extra::sha256::digest;
 use rusqlite::{Connection, Transaction};
-use snafu::{Whatever, prelude::*};
+use snafu::prelude::*;
 use std::{
     collections::HashMap,
     time::{SystemTime, UNIX_EPOCH},

@@ -1,16 +1,170 @@
-use crate::db::{Model, ModelInfo};
-use http_extra::sha256::digest;
+use crate::{
+    db,
+    db::{
+        CompletedStatus, Model, ModelInfo, completed_init, insert_model_info,
+        save_library_to_library_raw_data,
+    },
+    error::Whatever,
+};
+use http_extra::{client, sha256::digest};
 use reqwest::Client;
+use rusqlite::Connection;
 use scraper::{ElementRef, Html, Selector};
-use snafu::{Whatever, prelude::*};
-use std::collections::VecDeque;
-use tracing::debug;
+use snafu::{FromString, prelude::*};
+use std::{
+    collections::{HashMap, VecDeque},
+    sync::Arc,
+};
+use tokio::sync::Mutex;
+use tracing::{debug, error};
 use url::Url;
 
-pub(crate) async fn fetch_library_html(
+pub(crate) async fn try_save_model_info(
+    conn: Arc<Mutex<Connection>>,
     client: Client,
     remote_registry: Url,
-) -> Result<String, Whatever> {
+) -> Result<(), Whatever> {
+    if check_insert_model_info_completed(Arc::clone(&conn)).await? {
+        return Ok(());
+    }
+    match save_model_info(Arc::clone(&conn), client, remote_registry).await {
+        Ok(_) => {
+            completed_insert_model_info_completed(Arc::clone(&conn), CompletedStatus::Completed)
+                .await
+        }
+        Err(error) => Err(error),
+    }
+}
+
+pub(crate) async fn check_insert_model_info_completed(
+    conn: Arc<Mutex<Connection>>,
+) -> Result<bool, Whatever> {
+    let conn = conn.lock().await;
+    db::check_insert_model_info_completed(&conn)
+}
+
+pub(crate) async fn completed_insert_model_info_completed(
+    conn: Arc<Mutex<Connection>>,
+    completed_status: CompletedStatus,
+) -> Result<(), Whatever> {
+    let conn = conn.lock().await;
+    db::completed_insert_model_info_completed(&conn, completed_status)
+}
+
+pub(crate) async fn save_model_info(
+    conn: Arc<Mutex<Connection>>,
+    client: Client,
+    remote_registry: Url,
+) -> Result<(), Whatever> {
+    let old_model_raw_digest_map = query_model_title_and_model_info(Arc::clone(&conn)).await?;
+    let (library_html_sender, library_html_receiver) = tokio::sync::oneshot::channel::<String>();
+    let (model_info_sender, mut model_info_receiver) = tokio::sync::mpsc::channel(256);
+    // 生产者为从 ollama.com 中获取的全部模型列表的数据
+    let send_job = tokio::spawn(send(
+        client,
+        remote_registry,
+        library_html_sender,
+        model_info_sender,
+        old_model_raw_digest_map,
+    ));
+    let receive_job_one = tokio::spawn(receive_one(Arc::clone(&conn), library_html_receiver));
+    let receive_job_two = tokio::spawn(receive_two(Arc::clone(&conn), model_info_receiver));
+
+    match tokio::try_join!(send_job, receive_job_one, receive_job_two) {
+        Ok((Ok(_), Ok(_), Ok(_))) => Ok(()),
+        Ok((Err(error), _, _)) => Err(Whatever::with_source(
+            error.into(),
+            "Failed to send library and model info".to_owned(),
+        )),
+        Ok((_, Err(error), _)) => Err(Whatever::with_source(
+            error.into(),
+            "Failed to receive library".to_owned(),
+        )),
+        Ok((_, _, Err(error))) => Err(Whatever::with_source(
+            error.into(),
+            "Failed to receive model info".to_owned(),
+        )),
+        Err(error) => Err(Whatever::with_source(
+            error.into(),
+            "Failed to join all job to tokio".to_owned(),
+        )),
+    }
+}
+
+pub(crate) async fn query_model_title_and_model_info(
+    conn: Arc<Mutex<Connection>>,
+) -> Result<HashMap<String, String>, Whatever> {
+    let conn = conn.lock().await;
+    db::query_model_title_and_model_info(&conn)
+}
+async fn send(
+    client: Client,
+    remote_registry: Url,
+    library_html_sender: tokio::sync::oneshot::Sender<String>,
+    model_info_sender: tokio::sync::mpsc::Sender<ModelInfo>,
+    old_model_raw_digest_map: HashMap<String, String>,
+) -> Result<(), Whatever> {
+    let library_html = fetch_library_html(client.clone(), remote_registry.clone()).await?;
+    let library_html_str = library_html.as_str();
+    let mut model_infos = convert_to_model_infos(library_html_str)?;
+    library_html_sender
+        .send(library_html)
+        .with_whatever_context(|_| "send library html to channel failed!")?;
+    for model_info in model_infos.iter_mut() {
+        if let Some(old_raw_digest) = old_model_raw_digest_map.get(&model_info.title) {
+            if old_raw_digest == model_info.raw_digest.as_str() {
+                continue;
+            }
+        }
+        let (summary, readme, html_raw, model_tag_vec) =
+            fetch_model_more_info(&model_info, client.clone(), remote_registry.clone()).await?;
+        model_info.summary = summary;
+        model_info.readme = readme;
+        model_info.html_raw = html_raw;
+        model_info.models = model_tag_vec;
+        model_info_sender
+            .send(model_info.to_owned())
+            .await
+            .with_whatever_context(|_| "send model info to channel failed!")?;
+    }
+    Ok(())
+}
+
+async fn receive_one(
+    conn: Arc<Mutex<Connection>>,
+    library_html_receiver: tokio::sync::oneshot::Receiver<String>,
+) -> Result<(), Whatever> {
+    let html = library_html_receiver
+        .await
+        .with_whatever_context(|_| "receiver one get the library html from channel failed")?;
+    let conn = conn.lock().await;
+    save_library_to_library_raw_data(&conn, html)?;
+    Ok(())
+}
+
+async fn receive_two(
+    conn: Arc<Mutex<Connection>>,
+    mut model_info_receiver: tokio::sync::mpsc::Receiver<ModelInfo>,
+) -> Result<(), Whatever> {
+    let mut conn = conn.lock().await;
+    let mut all_success = true;
+    while let Some(model) = model_info_receiver.recv().await {
+        if let Ok(is_success) = insert_model_info(&mut conn, model)
+            && !is_success
+        {
+            all_success = false;
+        }
+    }
+    if all_success {
+        completed_init(&conn, CompletedStatus::Completed)?;
+    } else {
+        completed_init(&conn, CompletedStatus::Failed)?;
+    }
+    Ok(())
+}
+
+/// 获取包含全部模型的详情的页面
+async fn fetch_library_html(client: Client, remote_registry: Url) -> Result<String, Whatever> {
     let library_url = remote_registry
         .join("/library?sort=newest")
         .with_whatever_context(|_| "Failed to join the library url")?;
@@ -36,7 +190,7 @@ pub(crate) async fn fetch_library_html(
 /// 从详细页面中获取模型 summary 和 readme
 ///
 /// 从 /tags 页面可以获取全部的规格列表
-pub(crate) async fn fetch_model_more_info(
+async fn fetch_model_more_info(
     model: &ModelInfo,
     client: Client,
     remote_registry: Url,
@@ -142,9 +296,8 @@ fn convert_to_model_summary(html: impl AsRef<str>) -> Result<(String, String), W
     Ok((summary, readme))
 }
 
-pub(crate) fn convert_to_model_infos(
-    html: impl AsRef<str>,
-) -> Result<VecDeque<ModelInfo>, Whatever> {
+/// 将模型详细信息页转换成 VecDeque<ModelInfo>
+fn convert_to_model_infos(html: impl AsRef<str>) -> Result<VecDeque<ModelInfo>, Whatever> {
     let html = Html::parse_document(html.as_ref());
     let li_selector = get_selector("div#repo > ul li a")?;
     let title_selector = get_selector("div [x-test-model-title]")?;
@@ -197,9 +350,10 @@ pub(crate) fn convert_to_model_infos(
 }
 
 fn get_selector(selector_str: &'static str) -> Result<Selector, Whatever> {
-    let selector =
-        Selector::parse(selector_str).with_whatever_context(|_| "Failed to get the selector")?;
-    Ok(selector)
+    Selector::parse(selector_str).map_err(|error| {
+        error!("{error:?}");
+        Whatever::without_source(format!("Failed to get selector from {selector_str}"))
+    })
 }
 
 fn extract_text(el: &ElementRef, selector: &Selector) -> Option<String> {

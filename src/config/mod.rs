@@ -21,15 +21,6 @@ use url::Url;
 
 const LLAMA_BUDDY_CONFIG: &str = include_str!("llama-buddy.toml");
 
-pub async fn output() {
-    let mut config = Config::default();
-    let base = BaseDirs::new().expect("Couldn't get the base dir from os");
-    let data_path = base.data_dir().join("llama-buddy");
-    config.data.path = data_path;
-    let config_toml = config.display().expect("Couldn't get the config");
-    println!("{config_toml}");
-}
-
 /// 配置
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Config {
@@ -60,7 +51,7 @@ pub enum ConfigError {
         proxy: String,
         source: reqwest::Error,
     },
-    #[snafu(display("Could't build reqwest client"))]
+    #[snafu(display("Couldn't build reqwest client"))]
     ReqwestBuildClient { source: reqwest::Error },
 }
 

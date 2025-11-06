@@ -4,19 +4,21 @@ mod model;
 pub(crate) use config::*;
 pub(crate) use model::*;
 
+use crate::error::Whatever;
 use rusqlite::Connection;
-use snafu::{Whatever, prelude::*};
-use std::{fs::create_dir_all, path::Path, process::exit};
+use snafu::prelude::*;
+use std::{fs::create_dir_all, path::Path};
 
 const INIT_DB_SQL: &str = include_str!("schema.sql");
 
 /// 获取数据库连接
 pub fn open(path: impl AsRef<Path>, db_name: impl AsRef<str>) -> Result<Connection, Whatever> {
     let path = path.as_ref();
-    if path.exists() && path.is_file() {
-        eprintln!("Not Allowed File Path");
-        exit(-1);
-    }
+    // 保存数据库的路径不能是一个文件
+    ensure_whatever!(
+        !path.exists() || !path.is_file(),
+        "The path for saving the database cannot be a file"
+    );
     if !path.exists() {
         // 创建文件夹
         create_dir_all(path).with_whatever_context(|_| {
