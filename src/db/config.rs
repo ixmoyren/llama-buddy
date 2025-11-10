@@ -13,6 +13,16 @@ const SET_INSERT_MODEL_INFO_COMPLETED: &str = "update config set value = cast(?1
 
 const INSERT_CONFIG_ITEM: &str = r#"insert into config (name, value) values (?1, ?2) on conflict (name) do update set value = excluded.value, updated_at = strftime('%s', 'now')"#;
 
+const QUERY_MANIFEST_SCHEMA_VERSION: &str =
+    r#"select cast(value as integer) from config where name = 'manifest_schema_version'"#;
+
+const QUERY_MANIFEST_MEDIA_TYPE: &str =
+    r#"select value from config where name = 'manifest_media_type'"#;
+
+const QUERY_MEDIA_TYPE: &str = r#"select name from config where value = cast(?1 as blob)"#;
+
+const QUERY_MEDIA_FILE_TYPE: &str = r#"select value from config where name = ?1"#;
+
 pub enum CompletedStatus {
     NotStarted,
     Completed,
@@ -96,4 +106,44 @@ pub fn insert_config(
     conn.execute(INSERT_CONFIG_ITEM, (name, &value))
         .with_whatever_context(|_| "Failed to insert config")?;
     Ok(())
+}
+
+pub fn check_manifest_schema_version_and_media_type(
+    conn: &Connection,
+    schema_version: u32,
+    media_type: impl AsRef<str>,
+) -> Result<bool, Whatever> {
+    let manifest_scheme_version = conn
+        .query_row(QUERY_MANIFEST_SCHEMA_VERSION, [], |r| r.get::<_, u32>(0))
+        .with_whatever_context(|_| "Failed to get manifest scheme version")?;
+    if schema_version != manifest_scheme_version {
+        return Ok(false);
+    }
+    let manifest_media_type = conn
+        .query_row(QUERY_MANIFEST_MEDIA_TYPE, [], |r| r.get::<_, Vec<u8>>(0))
+        .with_whatever_context(|_| "Failed to get manifest media type")?;
+    let manifest_media_type = String::from_utf8(manifest_media_type)
+        .with_whatever_context(|_| "Couldn't convert manifest_media_type to string")?;
+    let media_type = media_type.as_ref();
+    Ok(manifest_media_type == media_type)
+}
+
+pub fn get_media_type(
+    conn: &Connection,
+    media_type: impl AsRef<str>,
+) -> Result<Option<(String, String)>, Whatever> {
+    let media_type = media_type.as_ref();
+    let media_type = conn
+        .query_row(QUERY_MEDIA_TYPE, [media_type], |r| r.get::<_, String>(0))
+        .with_whatever_context(|_| "Failed to get media type")?;
+    if media_type.is_empty() || media_type == "" {
+        return Ok(None);
+    }
+    let media = media_type.replace("_media_type", "");
+    let file_type = conn
+        .query_row(QUERY_MEDIA_FILE_TYPE, [&media], |r| r.get::<_, Vec<u8>>(0))
+        .with_whatever_context(|_| "Failed to get media file type")?;
+    let file_type = String::from_utf8(file_type)
+        .with_whatever_context(|_| "Couldn't convert media file type to string")?;
+    Ok(Some((media, file_type)))
 }

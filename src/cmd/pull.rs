@@ -44,7 +44,7 @@ pub async fn pull_model_from_registry(args: PullArgs) {
     ) = LLamaBuddyConfig::try_config_path().expect("Couldn't get the config");
     let sqlite_dir = data_path.join("sqlite");
     let conn = db::open(sqlite_dir, "llama-buddy.sqlite").expect("Couldn't open sqlite file");
-    let (model_name, category) = final_name_and_category(&name, category, &conn);
+    let (model_name, category) = final_name_and_category(&conn, &name, category);
     // 如果没有提供保存目录，那么使用默认目录
     let dir = data_path.join("model").join(model_name);
     // 获取下载 Model 时 HTTP client 的配置
@@ -61,6 +61,18 @@ pub async fn pull_model_from_registry(args: PullArgs) {
     let response = client.get(manifest_url).send().await.unwrap();
     let response_text = response.text().await.unwrap();
     let manifest: Manifest = serde_json::from_str(&response_text).unwrap();
+    // 判断当前的 Manifest 的 schema_version 和 media_type 是不是和注册表中的一致，如果不一致，那么需要退出，并且重新适配
+    if !db::check_manifest_schema_version_and_media_type(
+        &conn,
+        manifest.schema_version,
+        &manifest.media_type,
+    )
+    .expect("Failed to check manifest schema version and media type")
+    {
+        panic!(
+            "The manifest schema_version or media_type does not match. Please re-adapt the remote registry."
+        );
+    }
     // 获取重试时超时设置
     let chunk_timeout = client_config.build_chunk_timeout();
     for layer in manifest.layers {
@@ -71,7 +83,7 @@ pub async fn pull_model_from_registry(args: PullArgs) {
         let backoff = client_config.build_back_off();
         let blob_url = format!("/v2/library/{name}/blobs/{}", digest.replace(":", "-"));
         let blob_url = remote.join(blob_url.as_str()).unwrap();
-        let filename = file_name(media_type, digest.replace("sha256:", ""));
+        let filename = file_name(&conn, &media_type, digest.replace("sha256:", ""));
         let filepath = dir.join(&filename);
         let param = DownloadParam::try_new(blob_url, filename, dir.as_path())
             .unwrap()
@@ -86,6 +98,7 @@ pub async fn pull_model_from_registry(args: PullArgs) {
         if !checksum {
             panic!("{digest}: checksum failed");
         }
+        // 将这个目录保存在注册表中
     }
     if saved {
         let config = LLamaBuddyConfig {
@@ -106,14 +119,14 @@ pub async fn pull_model_from_registry(args: PullArgs) {
 }
 
 fn final_name_and_category(
-    name: impl AsRef<str>,
-    category: Option<String>,
     conn: &Connection,
+    name: impl AsRef<str> + std::fmt::Display,
+    category: Option<String>,
 ) -> (String, String) {
     match category {
         None => {
             let model_name = db::get_first_model_name(conn, name).unwrap();
-            if let Some(category) = model_name.rsplit(":").next() {
+            if let Some(category) = model_name.clone().rsplit(":").next() {
                 (model_name, category.to_owned())
             } else {
                 panic!("The category cannot be obtained from the local registry.")
@@ -132,21 +145,18 @@ fn final_name_and_category(
     }
 }
 
-fn file_name(media_type: impl AsRef<str>, digest: impl AsRef<str>) -> String {
+fn file_name(conn: &Connection, media_type: impl AsRef<str>, digest: impl AsRef<str>) -> String {
     let digest = digest.as_ref();
-    match media_type.as_ref() {
-        "application/vnd.ollama.image.model" => format!("model-{digest}.gguf"),
-        "application/vnd.ollama.image.template" => format!("template-{digest}.txt"),
-        "application/vnd.ollama.image.license" => format!("license-{digest}.txt"),
-        "application/vnd.ollama.image.params" => format!("params-{digest}.json"),
-        media => {
-            if let Some(file_type) = media.rsplit('.').next() {
-                format!("{file_type}-{digest}.txt")
-            } else {
-                digest.to_owned()
-            }
-        }
-    }
+    let media_type = media_type.as_ref();
+    let Some((media, file_type)) = db::get_media_type(conn, media_type).expect("No media type")
+    else {
+        return if let Some(file_type) = media_type.rsplit('.').next() {
+            format!("{file_type}-{digest}.txt")
+        } else {
+            digest.to_owned()
+        };
+    };
+    format!("{media}-{digest}.{file_type}")
 }
 
 #[derive(Args)]

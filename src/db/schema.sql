@@ -15,7 +15,18 @@ create table if not exists config
 
 insert into config(name, value)
 values ('init_status', cast('Not Started' as blob)),
-       ('insert_model_info_completed', cast('Not Started' as blob))
+       ('insert_model_info_completed', cast('Not Started' as blob)),
+       ('update_model_info_completed', cast('Not Started' as blob)),
+       ('manifest_schema_version', cast(2 as blob)),
+       ('manifest_media_type', cast('application/vnd.docker.distribution.manifest.v2+json' as blob)),
+       ('model_media_type', cast('application/vnd.ollama.image.model' as blob)),
+       ('template_media_type', cast('application/vnd.ollama.image.template' as blob)),
+       ('license_media_type', cast('application/vnd.ollama.image.license' as blob)),
+       ('params_media_type', cast('application/vnd.ollama.image.params' as blob)),
+       ('model', cast('gguf' as blob)),
+       ('template', cast('txt' as blob)),
+       ('license', cast('txt' as blob)),
+       ('params', cast('json' as blob))
 on conflict (name) do update set value      = excluded.value,
                                  updated_at = strftime('%s', 'now');
 
