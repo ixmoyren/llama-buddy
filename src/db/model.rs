@@ -46,6 +46,14 @@ const QUERY_MODEL_TITLE_AND_RAW_DIGEST: &str = r#"select title, raw_digest from 
 
 const QUERY_MODEL_NAME: &str = r#"select name from model where name = ?1;"#;
 
+const QUERY_FIRST_MODEL_NAME: &str = r#"
+select m.name
+from model m left join model_info mi on m.model_id = mi.id
+where mi.title = ?1
+order by m.created_at
+limit 1;
+"#;
+
 // 插入 model 信息
 #[derive(Eq, PartialEq, Clone, Default, Debug)]
 pub(crate) struct ModelInfo {
@@ -221,6 +229,12 @@ pub fn check_model_name(conn: &Connection, name: impl AsRef<str>) -> bool {
             false
         }
     }
+}
+
+pub fn get_first_model_name(conn: &Connection, name: impl AsRef<str>) -> Result<String, Whatever> {
+    let name = name.as_ref();
+    conn.query_one(QUERY_FIRST_MODEL_NAME, [name], |r| r.get::<_, String>(0))
+        .with_whatever_context(|_| "Failed to get first model name")
 }
 
 fn rollback_and_return(tx: Transaction) -> Result<bool, Whatever> {

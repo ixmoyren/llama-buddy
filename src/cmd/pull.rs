@@ -5,9 +5,16 @@ use crate::{
     db,
 };
 use clap::Args;
-use http_extra::{download, download::DownloadParam, retry};
+use http_extra::{
+    download,
+    download::DownloadParam,
+    retry,
+    sha256::{checksum, digest},
+};
+use reqwest::get;
+use rusqlite::Connection;
 use serde::Deserialize;
-use serde_json::from_str;
+use std::clone;
 use tracing::{debug, error};
 
 pub async fn pull_model_from_registry(args: PullArgs) {
@@ -29,26 +36,17 @@ pub async fn pull_model_from_registry(args: PullArgs) {
                 },
             model:
                 Model {
-                    category: category_default,
                     client: model_http_client_config,
+                    ..
                 },
         },
         config_path,
     ) = LLamaBuddyConfig::try_config_path().expect("Couldn't get the config");
-    // 如果没有提供模型的版本，使用配置中的默认值
-    let category = category.unwrap_or(category_default);
-    let model_prefix = format!("{name}:{category}");
     let sqlite_dir = data_path.join("sqlite");
     let conn = db::open(sqlite_dir, "llama-buddy.sqlite").expect("Couldn't open sqlite file");
-    // 检查一下提供的模型的名字和版本是否存在注册表中
-    if !db::check_model_name(&conn, &model_prefix) {
-        error!(
-            "The provided model name is not in the local registry. Please check the model name or try to update the local registry."
-        );
-        return;
-    }
+    let (model_name, category) = final_name_and_category(&name, category, &conn);
     // 如果没有提供保存目录，那么使用默认目录
-    let dir = data_path.join("model").join(model_prefix);
+    let dir = data_path.join("model").join(model_name);
     // 获取下载 Model 时 HTTP client 的配置
     let client_config = if let Some(new) = http_client_config {
         model_http_client_config.merge(new)
@@ -62,8 +60,7 @@ pub async fn pull_model_from_registry(args: PullArgs) {
     let manifest_url = remote.join(manifest_url.as_str()).unwrap();
     let response = client.get(manifest_url).send().await.unwrap();
     let response_text = response.text().await.unwrap();
-    let manifest: Manifest = from_str(&response_text).unwrap();
-    // let backoff = Arc::new(backoff);
+    let manifest: Manifest = serde_json::from_str(&response_text).unwrap();
     // 获取重试时超时设置
     let chunk_timeout = client_config.build_chunk_timeout();
     for layer in manifest.layers {
@@ -85,8 +82,7 @@ pub async fn pull_model_from_registry(args: PullArgs) {
         .await
         .unwrap();
         debug!("{summary:?}");
-        let checksum =
-            http_extra::sha256::checksum(filepath, digest.replace("sha256:", "")).unwrap();
+        let checksum = checksum(filepath, digest.replace("sha256:", "")).unwrap();
         if !checksum {
             panic!("{digest}: checksum failed");
         }
@@ -106,6 +102,33 @@ pub async fn pull_model_from_registry(args: PullArgs) {
         config
             .write_to_toml(config_path.as_path())
             .expect("Failed to write all configs to file");
+    }
+}
+
+fn final_name_and_category(
+    name: impl AsRef<str>,
+    category: Option<String>,
+    conn: &Connection,
+) -> (String, String) {
+    match category {
+        None => {
+            let model_name = db::get_first_model_name(conn, name).unwrap();
+            if let Some(category) = model_name.rsplit(":").next() {
+                (model_name, category.to_owned())
+            } else {
+                panic!("The category cannot be obtained from the local registry.")
+            }
+        }
+        Some(category) => {
+            // 用户有提供 category，那么检查这个 name:category 是否在本地注册表中存在
+            let model_name = format!("{name}:{category}");
+            if !db::check_model_name(&conn, &model_name) {
+                panic!(
+                    "The provided model name is not in the local registry. Please check the model name or try to update the local registry."
+                );
+            }
+            (model_name, category)
+        }
     }
 }
 
@@ -133,7 +156,7 @@ pub struct PullArgs {
     #[arg(
         short = 'c',
         long = "category",
-        help = "The category of mode, If the version of the mode is not provided, the default value is latest"
+        help = "The category of mode, If the version of the mode is not provided, the default value is obtained from the local registry"
     )]
     pub category: Option<String>,
     #[arg(
