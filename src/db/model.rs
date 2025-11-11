@@ -4,6 +4,7 @@ use rusqlite::{Connection, Transaction};
 use snafu::prelude::*;
 use std::{
     collections::HashMap,
+    path::Path,
     time::{SystemTime, UNIX_EPOCH},
 };
 use tracing::{error, info};
@@ -32,11 +33,10 @@ on conflict (href) do update set href       = excluded.href,
                                  updated_at = strftime('%s', 'now');"#;
 
 const INSERT_INTO_MODEL: &str = r#"
-insert into model (id, name, href, size, context, input, hash, model_id, updated_at)
-values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+insert into model (id, name, href, context, input, hash, model_id, updated_at)
+values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
 on conflict (name) do update set name       = excluded.name,
                                  href       = excluded.href,
-                                 size       = excluded.size,
                                  context    = excluded.context,
                                  input      = excluded.input,
                                  hash       = excluded.hash,
@@ -53,6 +53,21 @@ where mi.title = ?1
 order by m.created_at
 limit 1;
 "#;
+
+const UPDATE_MODEL_PATH_AND_SIZE: &str =
+    r#"update model set path = ?1, size = ?2 where name = ?3;"#;
+
+const UPDATE_TEMPLATE_PATH_AND_SIZE: &str =
+    r#"update model set template = ?1, template_size = ?2 where name = ?3;"#;
+
+const UPDATE_LICENSE_PATH_AND_SIZE: &str =
+    r#"update model set license = ?1, license_size = ?2 where name = ?3;"#;
+
+const UPDATE_PARAMS_PATH_AND_SIZE: &str =
+    r#"update model set params = ?1, params_size = ?2 where name = ?3;"#;
+
+const UPDATE_CONFIG_PATH_AND_SIZE: &str =
+    r#"update model set config = ?1, config_size = ?2 where name = ?3;"#;
 
 // 插入 model 信息
 #[derive(Eq, PartialEq, Clone, Default, Debug)]
@@ -93,8 +108,6 @@ pub(crate) struct Model {
     pub(crate) license: String,
     // 参数
     pub(crate) params: String,
-    // 大小
-    pub(crate) size: String,
     // 上下文大小
     pub(crate) context: String,
     // 输入类型
@@ -191,7 +204,6 @@ pub fn insert_model_info(conn: &mut Connection, info: ModelInfo) -> Result<bool,
                 &id,
                 &model.name,
                 &model.href,
-                &model.size,
                 &model.context,
                 &model.input,
                 &model.hash,
@@ -235,6 +247,31 @@ pub fn get_first_model_name(conn: &Connection, name: impl AsRef<str>) -> Result<
     let name = name.as_ref();
     conn.query_one(QUERY_FIRST_MODEL_NAME, [name], |r| r.get::<_, String>(0))
         .with_whatever_context(|_| "Failed to get first model name")
+}
+
+pub fn save_model_file_path(
+    conn: &Connection,
+    name: impl AsRef<str>,
+    path: impl AsRef<Path>,
+    size: usize,
+    media: impl AsRef<str>,
+) -> Result<(), Whatever> {
+    let media = media.as_ref();
+    let update_sql = match media {
+        "model" => UPDATE_MODEL_PATH_AND_SIZE,
+        "template" => UPDATE_TEMPLATE_PATH_AND_SIZE,
+        "license" => UPDATE_LICENSE_PATH_AND_SIZE,
+        "params" => UPDATE_PARAMS_PATH_AND_SIZE,
+        "config" => UPDATE_CONFIG_PATH_AND_SIZE,
+        str => whatever!("This value({str}) cannot be processed."),
+    };
+    let path = path.as_ref().display().to_string();
+    let name = name.as_ref();
+    conn.execute(update_sql, (&path, size, &name))
+        .with_whatever_context(|_| {
+            format!("Failed to update path and size by {media} for {name}")
+        })?;
+    Ok(())
 }
 
 fn rollback_and_return(tx: Transaction) -> Result<bool, Whatever> {

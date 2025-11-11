@@ -5,17 +5,10 @@ use crate::{
     db,
 };
 use clap::Args;
-use http_extra::{
-    download,
-    download::DownloadParam,
-    retry,
-    sha256::{checksum, digest},
-};
-use reqwest::get;
+use http_extra::{download, download::DownloadParam, retry, sha256::checksum};
 use rusqlite::Connection;
 use serde::Deserialize;
-use std::clone;
-use tracing::{debug, error};
+use tracing::debug;
 
 pub async fn pull_model_from_registry(args: PullArgs) {
     let PullArgs {
@@ -46,7 +39,7 @@ pub async fn pull_model_from_registry(args: PullArgs) {
     let conn = db::open(sqlite_dir, "llama-buddy.sqlite").expect("Couldn't open sqlite file");
     let (model_name, category) = final_name_and_category(&conn, &name, category);
     // 如果没有提供保存目录，那么使用默认目录
-    let dir = data_path.join("model").join(model_name);
+    let dir = data_path.join("model").join(&model_name);
     // 获取下载 Model 时 HTTP client 的配置
     let client_config = if let Some(new) = http_client_config {
         model_http_client_config.merge(new)
@@ -77,13 +70,19 @@ pub async fn pull_model_from_registry(args: PullArgs) {
     let chunk_timeout = client_config.build_chunk_timeout();
     for layer in manifest.layers {
         let Layer {
-            media_type, digest, ..
+            media_type,
+            digest,
+            size,
         } = layer;
         // 获取重试策略
         let backoff = client_config.build_back_off();
         let blob_url = format!("/v2/library/{name}/blobs/{}", digest.replace(":", "-"));
         let blob_url = remote.join(blob_url.as_str()).unwrap();
-        let filename = file_name(&conn, &media_type, digest.replace("sha256:", ""));
+        let Some((filename, media_type)) =
+            file_name(&conn, &media_type, digest.replace("sha256:", ""))
+        else {
+            continue;
+        };
         let filepath = dir.join(&filename);
         let param = DownloadParam::try_new(blob_url, filename, dir.as_path())
             .unwrap()
@@ -94,11 +93,13 @@ pub async fn pull_model_from_registry(args: PullArgs) {
         .await
         .unwrap();
         debug!("{summary:?}");
-        let checksum = checksum(filepath, digest.replace("sha256:", "")).unwrap();
+        let checksum = checksum(&filepath, digest.replace("sha256:", "")).unwrap();
         if !checksum {
             panic!("{digest}: checksum failed");
         }
         // 将这个目录保存在注册表中
+        db::save_model_file_path(&conn, &model_name, &filepath, size, &media_type)
+            .expect("Couldn't save model file path and size");
     }
     if saved {
         let config = LLamaBuddyConfig {
@@ -145,18 +146,18 @@ fn final_name_and_category(
     }
 }
 
-fn file_name(conn: &Connection, media_type: impl AsRef<str>, digest: impl AsRef<str>) -> String {
+fn file_name(
+    conn: &Connection,
+    media_type: impl AsRef<str>,
+    digest: impl AsRef<str>,
+) -> Option<(String, String)> {
     let digest = digest.as_ref();
     let media_type = media_type.as_ref();
     let Some((media, file_type)) = db::get_media_type(conn, media_type).expect("No media type")
     else {
-        return if let Some(file_type) = media_type.rsplit('.').next() {
-            format!("{file_type}-{digest}.txt")
-        } else {
-            digest.to_owned()
-        };
+        return None;
     };
-    format!("{media}-{digest}.{file_type}")
+    Some((format!("{media}-{digest}.{file_type}"), media))
 }
 
 #[derive(Args)]

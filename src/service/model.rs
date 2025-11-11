@@ -268,9 +268,6 @@ fn covert_to_model_tag(html: impl AsRef<str>) -> Result<Vec<Model>, Whatever> {
             continue;
         };
         let mut tag_p_select = x.select(&tag_p);
-        let Some(size_el) = tag_p_select.next() else {
-            continue;
-        };
         let Some(context_el) = tag_p_select.next() else {
             continue;
         };
@@ -283,14 +280,12 @@ fn covert_to_model_tag(html: impl AsRef<str>) -> Result<Vec<Model>, Whatever> {
         } else {
             "".to_owned()
         };
-        let size = size_el.inner_html();
         let context = context_el.inner_html();
         let input = input_el.inner_html();
         let hash = hash_el.inner_html();
         let model = Model {
             name,
             href,
-            size,
             context,
             input,
             hash,

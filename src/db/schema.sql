@@ -23,10 +23,12 @@ values ('init_status', cast('Not Started' as blob)),
        ('template_media_type', cast('application/vnd.ollama.image.template' as blob)),
        ('license_media_type', cast('application/vnd.ollama.image.license' as blob)),
        ('params_media_type', cast('application/vnd.ollama.image.params' as blob)),
+       ('config_media_type', cast('application/vnd.docker.container.image.v1+json' as blob)),
        ('model', cast('gguf' as blob)),
        ('template', cast('txt' as blob)),
        ('license', cast('txt' as blob)),
-       ('params', cast('json' as blob))
+       ('params', cast('json' as blob)),
+       ('config', cast('json' as blob))
 on conflict (name) do update set value      = excluded.value,
                                  updated_at = strftime('%s', 'now');
 
@@ -63,20 +65,25 @@ create unique index if not exists model_info_unique on model_info (title, href);
 -- 模型表
 create table if not exists model
 (
-    id         blob primary key,
-    name       text not null,
-    href       text not null,
-    path       text,
-    template   text,
-    license    text,
-    params     text,
-    size       text,
-    context    text,
-    input      text,
-    hash       text,
-    model_id   blob,
-    created_at integer default (strftime('%s', 'now')),
-    updated_at integer default (strftime('%s', 'now')),
+    id            blob primary key,
+    name          text not null,
+    href          text not null,
+    path          text,
+    size          integer,
+    template      text,
+    template_size integer,
+    license       text,
+    license_size  integer,
+    params        text,
+    params_size   integer,
+    config        text,
+    config_size   integer,
+    context       text,
+    input         text,
+    hash          text,
+    model_id      blob,
+    created_at    integer default (strftime('%s', 'now')),
+    updated_at    integer default (strftime('%s', 'now')),
     foreign key (model_id) references model_info (id)
 ) strict;
 
