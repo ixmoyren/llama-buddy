@@ -1,9 +1,10 @@
-use crate::error::Whatever;
+use crate::{db::CompletedStatus, error::Whatever};
 use http_extra::sha256::digest;
 use rusqlite::{Connection, Transaction};
 use snafu::prelude::*;
 use std::{
     collections::HashMap,
+    os::linux::raw::stat,
     path::Path,
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -55,19 +56,20 @@ limit 1;
 "#;
 
 const UPDATE_MODEL_PATH_AND_SIZE: &str =
-    r#"update model set path = ?1, size = ?2 where name = ?3;"#;
+    r#"update model set path = ?1, size = ?2, updated_at = strftime('%s', 'now') where name = ?3;"#;
 
-const UPDATE_TEMPLATE_PATH_AND_SIZE: &str =
-    r#"update model set template = ?1, template_size = ?2 where name = ?3;"#;
+const UPDATE_TEMPLATE_PATH_AND_SIZE: &str = r#"update model set template = ?1, template_size = ?2, updated_at = strftime('%s', 'now') where name = ?3;"#;
 
-const UPDATE_LICENSE_PATH_AND_SIZE: &str =
-    r#"update model set license = ?1, license_size = ?2 where name = ?3;"#;
+const UPDATE_LICENSE_PATH_AND_SIZE: &str = r#"update model set license = ?1, license_size = ?2, updated_at = strftime('%s', 'now') where name = ?3;"#;
 
-const UPDATE_PARAMS_PATH_AND_SIZE: &str =
-    r#"update model set params = ?1, params_size = ?2 where name = ?3;"#;
+const UPDATE_PARAMS_PATH_AND_SIZE: &str = r#"update model set params = ?1, params_size = ?2, updated_at = strftime('%s', 'now') where name = ?3;"#;
 
-const UPDATE_CONFIG_PATH_AND_SIZE: &str =
-    r#"update model set config = ?1, config_size = ?2 where name = ?3;"#;
+const UPDATE_CONFIG_PATH_AND_SIZE: &str = r#"update model set config = ?1, config_size = ?2, updated_at = strftime('%s', 'now') where name = ?3;"#;
+
+const SET_PULL_STATUS: &str =
+    r#"update model set pull_status = ?1, updated_at = strftime('%s', 'now') where name = ?2;"#;
+
+const QUERY_PULL_STATUS: &str = r#"select pull_status from model where name = ?1;"#;
 
 // 插入 model 信息
 #[derive(Eq, PartialEq, Clone, Default, Debug)]
@@ -272,6 +274,26 @@ pub fn save_model_file_path(
             format!("Failed to update path and size by {media} for {name}")
         })?;
     Ok(())
+}
+
+pub fn set_model_pull_status(
+    conn: &Connection,
+    name: impl AsRef<str>,
+    completed_status: CompletedStatus,
+) -> Result<(), Whatever> {
+    let status = completed_status.as_ref();
+    let name = name.as_ref();
+    conn.execute(SET_PULL_STATUS, (status, name))
+        .with_whatever_context(|_| format!("Failed to pull status for {name}"))?;
+    Ok(())
+}
+
+pub fn pull_completed(conn: &Connection, name: impl AsRef<str>) -> Result<bool, Whatever> {
+    let name = name.as_ref();
+    let status = conn
+        .query_one(QUERY_PULL_STATUS, [name], |r| r.get::<_, String>(0))
+        .with_whatever_context(|_| "Failed to get pull status for {name})")?;
+    Ok(status == CompletedStatus::Completed.as_ref())
 }
 
 fn rollback_and_return(tx: Transaction) -> Result<bool, Whatever> {

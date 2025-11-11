@@ -6,6 +6,7 @@ use crate::{
         Registry,
     },
     db,
+    db::CompletedStatus,
 };
 use clap::Args;
 use http_extra::{download, download::DownloadParam, retry, sha256::checksum};
@@ -13,7 +14,7 @@ use reqwest::Client;
 use rusqlite::Connection;
 use serde::Deserialize;
 use std::path::PathBuf;
-use tracing::debug;
+use tracing::{debug, info};
 use url::Url;
 
 pub async fn pull_model_from_registry(args: PullArgs) {
@@ -44,6 +45,11 @@ pub async fn pull_model_from_registry(args: PullArgs) {
     let sqlite_dir = data_path.join("sqlite");
     let conn = db::open(sqlite_dir, "llama-buddy.sqlite").expect("Couldn't open sqlite file");
     let (model_name, category) = final_name_and_category(&conn, &name, category);
+    // 判断一下该模型是否已经完成拉取
+    if db::pull_completed(&conn, &model_name).expect("Couldn't get pull completed!") {
+        info!("Pull completed");
+        return;
+    }
     // 如果没有提供保存目录，那么使用默认目录
     let dir = data_path.join("model").join(&model_name);
     // 获取下载 Model 时 HTTP client 的配置
@@ -114,6 +120,9 @@ pub async fn pull_model_from_registry(args: PullArgs) {
         &dir,
     )
     .await;
+    // 保存一个拉取状态，完成拉取
+    db::set_model_pull_status(&conn, &model_name, CompletedStatus::Completed)
+        .expect("Couldn't to set model pull status");
     if saved {
         let config = LLamaBuddyConfig {
             data: Data { path: data_path },
@@ -130,6 +139,7 @@ pub async fn pull_model_from_registry(args: PullArgs) {
             .write_to_toml(config_path.as_path())
             .expect("Failed to write all configs to file");
     }
+    info!("Pull completed");
 }
 
 async fn save_res_to_local(
