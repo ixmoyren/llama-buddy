@@ -8,12 +8,7 @@ use crate::{
     db,
 };
 use clap::Args;
-use http_extra::{
-    download,
-    download::DownloadParam,
-    retry,
-    sha256::{checksum, digest},
-};
+use http_extra::{download, download::DownloadParam, retry, sha256::checksum};
 use reqwest::Client;
 use rusqlite::Connection;
 use serde::Deserialize;
@@ -100,6 +95,25 @@ pub async fn pull_model_from_registry(args: PullArgs) {
         )
         .await;
     }
+    let Config {
+        media_type,
+        digest,
+        size,
+    } = manifest.config;
+    save_res_to_local(
+        &conn,
+        &client_config,
+        chunk_timeout,
+        &remote,
+        client.clone(),
+        &name,
+        &model_name,
+        media_type,
+        digest,
+        size,
+        &dir,
+    )
+    .await;
     if saved {
         let config = LLamaBuddyConfig {
             data: Data { path: data_path },
