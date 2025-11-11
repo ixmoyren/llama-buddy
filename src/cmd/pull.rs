@@ -145,31 +145,48 @@ async fn save_res_to_local(
     size: usize,
     dir: &PathBuf,
 ) {
-    // 获取重试策略
-    let backoff = client_config.build_back_off();
-    let blob_url = format!("/v2/library/{name}/blobs/{}", digest.replace(":", "-"));
-    let blob_url = remote.join(blob_url.as_str()).unwrap();
     let Some((filename, media_type)) = file_name(conn, &media_type, digest.replace("sha256:", ""))
     else {
         return;
     };
     let filepath = dir.join(&filename);
-    let param = DownloadParam::try_new(blob_url, filename, dir.as_path())
-        .expect("Couldn't build a download param.")
-        .with_chunk_timeout(chunk_timeout);
-    let summary = retry::spawn(backoff, async || {
-        download::spawn(client.clone(), param.clone()).await
-    })
-    .await
-    .unwrap();
-    debug!("{summary:?}");
-    let checksum = checksum(&filepath, digest.replace("sha256:", "")).unwrap();
-    if !checksum {
-        panic!("{digest}: checksum failed");
+    // 判断文件是否需要重新下载
+    if need_retry_download(&filepath, &digest) {
+        // 获取重试策略
+        let backoff = client_config.build_back_off();
+        let blob_url = format!("/v2/library/{name}/blobs/{}", digest.replace(":", "-"));
+        let blob_url = remote.join(blob_url.as_str()).unwrap();
+        let param = DownloadParam::try_new(blob_url, filename, dir.as_path())
+            .expect("Couldn't build a download param.")
+            .with_chunk_timeout(chunk_timeout);
+        let summary = retry::spawn(backoff, async || {
+            download::spawn(client.clone(), param.clone()).await
+        })
+        .await
+        .expect("Couldn't download the resources");
+        debug!("{summary:?}");
+        let checksum = checksum(&filepath, digest.replace("sha256:", ""))
+            .expect("There is no way to obtain the digest of the file");
+        if !checksum {
+            panic!("{digest}: checksum failed");
+        }
     }
     // 将这个目录保存在注册表中
     db::save_model_file_path(&conn, &model_name, &filepath, size, &media_type)
         .expect("Couldn't save model file path and size");
+}
+
+fn need_retry_download(filepath: &PathBuf, digest: &String) -> bool {
+    // 文件不存在，重新下载
+    if !filepath.exists() {
+        return true;
+    }
+    // 文件存在，判断一下文件的摘要，摘要不一样，重新下载
+    let Ok(checksum) = checksum(&filepath, digest.replace("sha256:", "")) else {
+        // 没有办法校验摘要，那么重新下载
+        return true;
+    };
+    !checksum
 }
 
 fn final_name_and_category(

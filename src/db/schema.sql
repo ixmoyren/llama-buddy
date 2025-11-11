@@ -56,6 +56,7 @@ create table if not exists model_info
     summary      text,
     readme       text,
     updated_time text,
+    pull_status  text    default ('Not Started'),
     created_at   integer default (strftime('%s', 'now')),
     updated_at   integer default (strftime('%s', 'now'))
 ) strict;
