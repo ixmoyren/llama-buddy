@@ -3,7 +3,7 @@
     "build:compress": "terser node_modules/@scalar/api-reference/dist/browser/standalone.js -o static/scalar-api-reference.js"
   },
   "devDependencies": {
-    "@scalar/api-reference": "^1.39.1",
-    "terser": "^5.44.0"
+    "@scalar/api-reference": "^1.39.3",
+    "terser": "^5.44.1"
   }
 }
