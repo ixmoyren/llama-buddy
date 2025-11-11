@@ -15,7 +15,7 @@ memmap2 = "0.9.9"
 rand = "0.9.2"
 reqwest = { workspace = true }
 sys-extra = { workspace = true, features = ["dir"] }
-sha2 = "0.11.0-rc.2"
+sha2 = "0.11.0-rc.3"
 snafu = { workspace = true }
 tracing = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
