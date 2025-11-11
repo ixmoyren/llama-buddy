@@ -155,7 +155,7 @@ async fn save_res_to_local(
     };
     let filepath = dir.join(&filename);
     let param = DownloadParam::try_new(blob_url, filename, dir.as_path())
-        .unwrap()
+        .expect("Couldn't build a download param.")
         .with_chunk_timeout(chunk_timeout);
     let summary = retry::spawn(backoff, async || {
         download::spawn(client.clone(), param.clone()).await

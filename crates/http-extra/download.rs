@@ -59,12 +59,12 @@ impl DownloadParam {
         let save_to = save_to.as_ref();
         // 保存文件的路径存在，但是不是目录，那么直接返回错误
         ensure_whatever!(
-            save_to.try_exists().context(IoOperationSnafu {
+            !save_to.try_exists().context(IoOperationSnafu {
                 message: format!(
                     "Didn't determine whether this path({}) exists",
                     save_to.display()
                 ),
-            })? && save_to.is_dir(),
+            })? || save_to.is_dir(),
             "The {} is not a directory",
             save_to.display()
         );
