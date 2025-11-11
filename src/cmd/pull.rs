@@ -1,14 +1,25 @@
 //！从远程仓库中拉取模型
 
 use crate::{
-    config::{Config as LLamaBuddyConfig, Data, HttpClient as HttpClientConfig, Model, Registry},
+    config::{
+        Config as LLamaBuddyConfig, Data, HttpClient as HttpClientConfig, HttpClient, Model,
+        Registry,
+    },
     db,
 };
 use clap::Args;
-use http_extra::{download, download::DownloadParam, retry, sha256::checksum};
+use http_extra::{
+    download,
+    download::DownloadParam,
+    retry,
+    sha256::{checksum, digest},
+};
+use reqwest::Client;
 use rusqlite::Connection;
 use serde::Deserialize;
+use std::path::PathBuf;
 use tracing::debug;
+use url::Url;
 
 pub async fn pull_model_from_registry(args: PullArgs) {
     let PullArgs {
@@ -74,32 +85,20 @@ pub async fn pull_model_from_registry(args: PullArgs) {
             digest,
             size,
         } = layer;
-        // 获取重试策略
-        let backoff = client_config.build_back_off();
-        let blob_url = format!("/v2/library/{name}/blobs/{}", digest.replace(":", "-"));
-        let blob_url = remote.join(blob_url.as_str()).unwrap();
-        let Some((filename, media_type)) =
-            file_name(&conn, &media_type, digest.replace("sha256:", ""))
-        else {
-            continue;
-        };
-        let filepath = dir.join(&filename);
-        let param = DownloadParam::try_new(blob_url, filename, dir.as_path())
-            .unwrap()
-            .with_chunk_timeout(chunk_timeout);
-        let summary = retry::spawn(backoff, async || {
-            download::spawn(client.clone(), param.clone()).await
-        })
-        .await
-        .unwrap();
-        debug!("{summary:?}");
-        let checksum = checksum(&filepath, digest.replace("sha256:", "")).unwrap();
-        if !checksum {
-            panic!("{digest}: checksum failed");
-        }
-        // 将这个目录保存在注册表中
-        db::save_model_file_path(&conn, &model_name, &filepath, size, &media_type)
-            .expect("Couldn't save model file path and size");
+        save_res_to_local(
+            &conn,
+            &client_config,
+            chunk_timeout,
+            &remote,
+            client.clone(),
+            &name,
+            &model_name,
+            media_type,
+            digest,
+            size,
+            &dir,
+        )
+        .await;
     }
     if saved {
         let config = LLamaBuddyConfig {
@@ -117,6 +116,46 @@ pub async fn pull_model_from_registry(args: PullArgs) {
             .write_to_toml(config_path.as_path())
             .expect("Failed to write all configs to file");
     }
+}
+
+async fn save_res_to_local(
+    conn: &Connection,
+    client_config: &HttpClient,
+    chunk_timeout: Option<u64>,
+    remote: &Url,
+    client: Client,
+    name: &String,
+    model_name: &String,
+    media_type: String,
+    digest: String,
+    size: usize,
+    dir: &PathBuf,
+) {
+    // 获取重试策略
+    let backoff = client_config.build_back_off();
+    let blob_url = format!("/v2/library/{name}/blobs/{}", digest.replace(":", "-"));
+    let blob_url = remote.join(blob_url.as_str()).unwrap();
+    let Some((filename, media_type)) = file_name(conn, &media_type, digest.replace("sha256:", ""))
+    else {
+        return;
+    };
+    let filepath = dir.join(&filename);
+    let param = DownloadParam::try_new(blob_url, filename, dir.as_path())
+        .unwrap()
+        .with_chunk_timeout(chunk_timeout);
+    let summary = retry::spawn(backoff, async || {
+        download::spawn(client.clone(), param.clone()).await
+    })
+    .await
+    .unwrap();
+    debug!("{summary:?}");
+    let checksum = checksum(&filepath, digest.replace("sha256:", "")).unwrap();
+    if !checksum {
+        panic!("{digest}: checksum failed");
+    }
+    // 将这个目录保存在注册表中
+    db::save_model_file_path(&conn, &model_name, &filepath, size, &media_type)
+        .expect("Couldn't save model file path and size");
 }
 
 fn final_name_and_category(
