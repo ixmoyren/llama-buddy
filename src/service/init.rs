@@ -13,5 +13,5 @@ pub(crate) async fn completed_init(
     completed_status: CompletedStatus,
 ) -> Result<(), Whatever> {
     let conn = conn.lock().await;
-    db::completed_init(&conn, completed_status)
+    db::config::completed_init(&conn, completed_status)
 }

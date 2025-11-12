@@ -1,8 +1,8 @@
 use crate::{
     db,
     db::{
-        CompletedStatus, Model, ModelInfo, completed_init, insert_model_info,
-        save_library_to_library_raw_data,
+        CompletedStatus,
+        model::{Model, ModelInfo},
     },
     error::Whatever,
 };
@@ -38,7 +38,7 @@ pub(crate) async fn completed_update_model_info(
     completed_status: CompletedStatus,
 ) -> Result<(), Whatever> {
     let conn = conn.lock().await;
-    db::completed_update_model_info(&conn, completed_status)
+    db::config::completed_update_model_info(&conn, completed_status)
 }
 
 pub(crate) async fn try_save_model_info(
@@ -62,7 +62,7 @@ pub(crate) async fn check_insert_model_info_completed(
     conn: Arc<Mutex<Connection>>,
 ) -> Result<bool, Whatever> {
     let conn = conn.lock().await;
-    db::check_insert_model_info_completed(&conn)
+    db::config::check_insert_model_info_completed(&conn)
 }
 
 pub(crate) async fn completed_insert_model_info(
@@ -70,7 +70,7 @@ pub(crate) async fn completed_insert_model_info(
     completed_status: CompletedStatus,
 ) -> Result<(), Whatever> {
     let conn = conn.lock().await;
-    db::completed_insert_model_info(&conn, completed_status)
+    db::config::completed_insert_model_info(&conn, completed_status)
 }
 
 pub(crate) async fn save_model_info(
@@ -117,7 +117,7 @@ pub(crate) async fn query_model_title_and_model_info(
     conn: Arc<Mutex<Connection>>,
 ) -> Result<HashMap<String, String>, Whatever> {
     let conn = conn.lock().await;
-    db::query_model_title_and_model_info(&conn)
+    db::model::query_model_title_and_model_info(&conn)
 }
 async fn send(
     client: Client,
@@ -160,7 +160,7 @@ async fn receive_one(
         .await
         .with_whatever_context(|_| "receiver one get the library html from channel failed")?;
     let conn = conn.lock().await;
-    save_library_to_library_raw_data(&conn, html)?;
+    db::model::save_library_to_library_raw_data(&conn, html)?;
     Ok(())
 }
 
@@ -171,16 +171,16 @@ async fn receive_two(
     let mut conn = conn.lock().await;
     let mut all_success = true;
     while let Some(model) = model_info_receiver.recv().await {
-        if let Ok(is_success) = insert_model_info(&mut conn, model)
+        if let Ok(is_success) = db::model::insert_model_info(&mut conn, model)
             && !is_success
         {
             all_success = false;
         }
     }
     if all_success {
-        completed_init(&conn, CompletedStatus::Completed)?;
+        db::config::completed_init(&conn, CompletedStatus::Completed)?;
     } else {
-        completed_init(&conn, CompletedStatus::Failed)?;
+        db::config::completed_init(&conn, CompletedStatus::Failed)?;
     }
     Ok(())
 }

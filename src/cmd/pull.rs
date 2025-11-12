@@ -62,7 +62,7 @@ pub async fn pull_model_from_registry(args: PullArgs) {
     let response_text = response.text().await.unwrap();
     let manifest: Manifest = serde_json::from_str(&response_text).unwrap();
     // 判断当前的 Manifest 的 schema_version 和 media_type 是不是和注册表中的一致，如果不一致，那么需要退出，并且重新适配
-    if !db::check_manifest_schema_version_and_media_type(
+    if !db::config::check_manifest_schema_version_and_media_type(
         &conn,
         manifest.schema_version,
         &manifest.media_type,
@@ -116,7 +116,7 @@ pub async fn pull_model_from_registry(args: PullArgs) {
     )
     .await;
     // 保存一个拉取状态，完成拉取，用来标识全部的资源都已经拉取完成
-    db::set_model_pull_status(&conn, &model_name, CompletedStatus::Completed)
+    db::model::set_model_pull_status(&conn, &model_name, CompletedStatus::Completed)
         .expect("Couldn't to set model pull status");
     if saved {
         let config = LLamaBuddyConfig {
@@ -177,7 +177,7 @@ async fn save_res_to_local(
         }
     }
     // 将这个目录保存在注册表中
-    db::save_model_file_path(&conn, &model_name, &filepath, size, &media_type)
+    db::model::save_model_file_path(&conn, &model_name, &filepath, size, &media_type)
         .expect("Couldn't save model file path and size");
 }
 
@@ -201,7 +201,7 @@ fn final_name_and_category(
 ) -> (String, String) {
     match category {
         None => {
-            let model_name = db::get_first_model_name(conn, name).unwrap();
+            let model_name = db::model::get_first_model_name(conn, name).unwrap();
             if let Some(category) = model_name.clone().rsplit(":").next() {
                 (model_name, category.to_owned())
             } else {
@@ -211,7 +211,7 @@ fn final_name_and_category(
         Some(category) => {
             // 用户有提供 category，那么检查这个 name:category 是否在本地注册表中存在
             let model_name = format!("{name}:{category}");
-            if !db::check_model_name(&conn, &model_name) {
+            if !db::model::check_model_name(&conn, &model_name) {
                 panic!(
                     "The provided model name is not in the local registry. Please check the model name or try to update the local registry."
                 );
@@ -228,7 +228,8 @@ fn file_name(
 ) -> Option<(String, String)> {
     let digest = digest.as_ref();
     let media_type = media_type.as_ref();
-    let Some((media, file_type)) = db::get_media_type(conn, media_type).expect("No media type")
+    let Some((media, file_type)) =
+        db::config::get_media_type(conn, media_type).expect("No media type")
     else {
         return None;
     };

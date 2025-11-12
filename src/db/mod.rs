@@ -1,8 +1,5 @@
-mod config;
-mod model;
-
-pub(crate) use config::*;
-pub(crate) use model::*;
+pub(crate) mod config;
+pub(crate) mod model;
 
 use crate::error::Whatever;
 use rusqlite::Connection;

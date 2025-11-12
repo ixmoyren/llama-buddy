@@ -3,8 +3,8 @@ use rusqlite::Connection;
 use std::{path::Path, sync::Arc};
 use tokio::sync::Mutex;
 
-pub mod init;
-pub mod model;
+pub(crate) mod init;
+pub(crate) mod model;
 
 pub(crate) fn connection(
     path: impl AsRef<Path>,

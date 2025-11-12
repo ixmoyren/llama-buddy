@@ -4,7 +4,6 @@ use rusqlite::{Connection, Transaction};
 use snafu::prelude::*;
 use std::{
     collections::HashMap,
-    os::linux::raw::stat,
     path::Path,
     time::{SystemTime, UNIX_EPOCH},
 };
