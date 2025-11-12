@@ -44,6 +44,11 @@ pub async fn pull_model_from_registry(args: PullArgs) {
     ) = LLamaBuddyConfig::try_config_path().expect("Couldn't get the config");
     let sqlite_dir = data_path.join("sqlite");
     let conn = db::open(sqlite_dir, "llama-buddy.sqlite").expect("Couldn't open sqlite file");
+    // 检查一下有没有完成初始化，没有完成初始化，那么应该在完成初始化之后才能够拉取
+    if !db::check_init_completed(&conn).expect("Couldn't check init whatever completed") {
+        info!("Initialization should be ensured to be completed");
+        return;
+    }
     let (model_name, category) = final_name_and_category(&conn, &name, category);
     // 如果没有提供保存目录，那么使用默认目录
     let dir = data_path.join("model").join(&model_name);
