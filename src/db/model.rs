@@ -288,7 +288,7 @@ pub fn set_model_pull_status(
     Ok(())
 }
 
-pub fn pull_completed(conn: &Connection, name: impl AsRef<str>) -> Result<bool, Whatever> {
+pub fn check_pull_completed(conn: &Connection, name: impl AsRef<str>) -> Result<bool, Whatever> {
     let name = name.as_ref();
     let status = conn
         .query_one(QUERY_PULL_STATUS, [name], |r| r.get::<_, String>(0))

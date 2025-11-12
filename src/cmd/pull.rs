@@ -46,7 +46,7 @@ pub async fn pull_model_from_registry(args: PullArgs) {
     let conn = db::open(sqlite_dir, "llama-buddy.sqlite").expect("Couldn't open sqlite file");
     let (model_name, category) = final_name_and_category(&conn, &name, category);
     // 判断一下该模型是否已经完成拉取
-    if db::pull_completed(&conn, &model_name).expect("Couldn't get pull completed!") {
+    if db::check_pull_completed(&conn, &model_name).expect("Couldn't get pull completed!") {
         info!("Pull completed");
         return;
     }

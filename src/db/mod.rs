@@ -59,5 +59,5 @@ pub fn check_init_completed(conn: &Connection) -> Result<bool, Whatever> {
         .with_whatever_context(|_| "Couldn't get init_status")?;
     let init_status = String::from_utf8(init_status)
         .with_whatever_context(|_| "Couldn't convert init_status to string")?;
-    Ok(init_status == "Completed")
+    Ok(init_status == CompletedStatus::Completed.as_ref())
 }
