@@ -45,11 +45,6 @@ pub async fn pull_model_from_registry(args: PullArgs) {
     let sqlite_dir = data_path.join("sqlite");
     let conn = db::open(sqlite_dir, "llama-buddy.sqlite").expect("Couldn't open sqlite file");
     let (model_name, category) = final_name_and_category(&conn, &name, category);
-    // 判断一下该模型是否已经完成拉取
-    if db::check_pull_completed(&conn, &model_name).expect("Couldn't get pull completed!") {
-        info!("Pull completed");
-        return;
-    }
     // 如果没有提供保存目录，那么使用默认目录
     let dir = data_path.join("model").join(&model_name);
     // 获取下载 Model 时 HTTP client 的配置
@@ -120,7 +115,7 @@ pub async fn pull_model_from_registry(args: PullArgs) {
         &dir,
     )
     .await;
-    // 保存一个拉取状态，完成拉取
+    // 保存一个拉取状态，完成拉取，用来标识全部的资源都已经拉取完成
     db::set_model_pull_status(&conn, &model_name, CompletedStatus::Completed)
         .expect("Couldn't to set model pull status");
     if saved {
