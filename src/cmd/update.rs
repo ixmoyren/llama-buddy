@@ -14,7 +14,6 @@ pub async fn update_local_registry(args: UpdateArgs) {
         remote_registry: new_remote,
         client: http_client_config,
         saved,
-        registry,
         ..
     } = args;
     let (
@@ -50,11 +49,9 @@ pub async fn update_local_registry(args: UpdateArgs) {
         info!("Initialization should be ensured to be completed");
     } else {
         // 更新注册表
-        if registry {
-            service::model::try_update_model_info(Arc::clone(&conn), client, remote.clone())
-                .await
-                .expect("Couldn't update model info");
-        }
+        service::model::try_update_model_info(Arc::clone(&conn), client, remote.clone())
+            .await
+            .expect("Couldn't update model info");
     }
     // 保存 cli 传入的参数到配置文件中
     if saved {
@@ -89,6 +86,4 @@ pub struct UpdateArgs {
         help = "Save the options provided in the command line to a configuration file"
     )]
     pub saved: bool,
-    #[arg(long = "registry", help = "Update the local registry")]
-    pub registry: bool,
 }

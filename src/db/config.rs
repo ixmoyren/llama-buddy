@@ -1,4 +1,4 @@
-use crate::error::Whatever;
+use crate::{db::CompletedStatus, error::Whatever};
 use rusqlite::Connection;
 use snafu::prelude::*;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -22,24 +22,6 @@ const QUERY_MANIFEST_MEDIA_TYPE: &str =
 const QUERY_MEDIA_TYPE: &str = r#"select name from config where value = cast(?1 as blob)"#;
 
 const QUERY_MEDIA_FILE_TYPE: &str = r#"select value from config where name = ?1"#;
-
-pub enum CompletedStatus {
-    NotStarted,
-    Completed,
-    InProgress,
-    Failed,
-}
-
-impl AsRef<str> for CompletedStatus {
-    fn as_ref(&self) -> &str {
-        match self {
-            Self::NotStarted => "Not Started",
-            Self::Completed => "Completed",
-            Self::InProgress => "In Progress",
-            Self::Failed => "Failed",
-        }
-    }
-}
 
 /// 完成初始化
 pub fn completed_init(
@@ -65,7 +47,7 @@ pub fn check_insert_model_info_completed(conn: &Connection) -> Result<bool, What
         .with_whatever_context(|_| "Failed to get init status")?;
     let init_status = String::from_utf8(init_status)
         .with_whatever_context(|_| "Couldn't convert init_status to string")?;
-    Ok(init_status == "Completed")
+    Ok(init_status == CompletedStatus::Completed.as_ref())
 }
 
 pub fn completed_insert_model_info(

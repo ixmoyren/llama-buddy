@@ -38,7 +38,7 @@ enum Commands {
     Config,
     #[command(about = "Init local registry")]
     Init(InitArgs),
-    #[command(about = "Pull model from registry")]
+    #[command(about = "Pull model from remote registry")]
     Pull(PullArgs),
     #[command(about = "Update local registry")]
     Update(UpdateArgs),

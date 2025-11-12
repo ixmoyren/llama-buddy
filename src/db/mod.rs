@@ -9,6 +9,24 @@ use rusqlite::Connection;
 use snafu::prelude::*;
 use std::{fs::create_dir_all, path::Path};
 
+pub enum CompletedStatus {
+    NotStarted,
+    Completed,
+    InProgress,
+    Failed,
+}
+
+impl AsRef<str> for CompletedStatus {
+    fn as_ref(&self) -> &str {
+        match self {
+            Self::NotStarted => "Not Started",
+            Self::Completed => "Completed",
+            Self::InProgress => "In Progress",
+            Self::Failed => "Failed",
+        }
+    }
+}
+
 const INIT_DB_SQL: &str = include_str!("schema.sql");
 
 /// 获取数据库连接
