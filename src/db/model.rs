@@ -291,7 +291,7 @@ pub fn check_pull_completed(conn: &Connection, name: impl AsRef<str>) -> Result<
     let name = name.as_ref();
     let status = conn
         .query_one(QUERY_PULL_STATUS, [name], |r| r.get::<_, String>(0))
-        .with_whatever_context(|_| "Failed to get pull status for {name})")?;
+        .with_whatever_context(|_| format!("Failed to get pull status for {name}"))?;
     Ok(status == CompletedStatus::Completed.as_ref())
 }
 
