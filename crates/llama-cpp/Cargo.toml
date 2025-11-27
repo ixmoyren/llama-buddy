@@ -29,4 +29,4 @@ android-shared-stdcxx = ["llama-cpp-sys/android-shared-stdcxx"]
 snafu = { workspace = true }
 clap = { workspace = true }
 llama-cpp = { path = ".", features = ["cuda"], default-features = false }
-rustyline = { workspace = true }
+rustyline = { workspace = true, features = ["with-file-history"] }
