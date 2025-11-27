@@ -7,6 +7,7 @@ use crate::{
     },
     db,
     db::CompletedStatus,
+    service,
 };
 use clap::Args;
 use http_extra::{download, download::DownloadParam, retry, sha256::checksum};
@@ -43,14 +44,16 @@ pub async fn pull_model_from_registry(args: PullArgs) {
         config_path,
     ) = LLamaBuddyConfig::try_config_path().expect("Couldn't get the config");
     let sqlite_dir = data_path.join("sqlite");
-    let conn = db::open(sqlite_dir, "llama-buddy.sqlite").expect("Couldn't open sqlite file");
+    let conn = db::open_llama_buddy_db(sqlite_dir).expect("Couldn't open sqlite file");
     // 检查一下有没有完成初始化，没有完成初始化，那么应该在完成初始化之后才能够拉取
-    if !db::check_init_completed(&conn).expect("Couldn't check init whatever completed") {
+    if !db::check_llama_buddy_init_completed(&conn).expect("Couldn't check init whatever completed")
+    {
         info!("Initialization should be ensured to be completed");
         return;
     }
-    let (model_name, category) = final_name_and_category(&conn, &name, category);
-    // 如果没有提供保存目录，那么使用默认目录
+    let (model_name, category) = service::model::final_name_and_category(&conn, &name, category)
+        .expect("Couldn't get model name and category");
+    // 获取模型所在目录
     let dir = data_path.join("model").join(&model_name);
     // 获取下载 Model 时 HTTP client 的配置
     let client_config = if let Some(new) = http_client_config {
@@ -197,33 +200,6 @@ fn need_retry_download(filepath: &PathBuf, digest: &String) -> bool {
         return true;
     };
     !checksum
-}
-
-fn final_name_and_category(
-    conn: &Connection,
-    name: impl AsRef<str> + std::fmt::Display,
-    category: Option<String>,
-) -> (String, String) {
-    match category {
-        None => {
-            let model_name = db::model::get_first_model_name(conn, name).unwrap();
-            if let Some(category) = model_name.clone().rsplit(":").next() {
-                (model_name, category.to_owned())
-            } else {
-                panic!("The category cannot be obtained from the local registry.")
-            }
-        }
-        Some(category) => {
-            // 用户有提供 category，那么检查这个 name:category 是否在本地注册表中存在
-            let model_name = format!("{name}:{category}");
-            if !db::model::check_model_name(&conn, &model_name) {
-                panic!(
-                    "The provided model name is not in the local registry. Please check the model name or try to update the local registry."
-                );
-            }
-            (model_name, category)
-        }
-    }
 }
 
 fn file_name(

@@ -19,6 +19,32 @@ use tokio::sync::Mutex;
 use tracing::{debug, error};
 use url::Url;
 
+pub(crate) fn final_name_and_category(
+    conn: &Connection,
+    name: impl AsRef<str> + std::fmt::Display,
+    category: Option<String>,
+) -> Result<(String, String), Whatever> {
+    match category {
+        None => {
+            let model_name = db::model::get_first_model_name(conn, name).unwrap();
+            if let Some(category) = model_name.clone().rsplit(":").next() {
+                Ok((model_name, category.to_owned()))
+            } else {
+                whatever!("The category cannot be obtained from the local registry.")
+            }
+        }
+        Some(category) => {
+            // 用户有提供 category，那么检查这个 name:category 是否在本地注册表中存在
+            let model_name = format!("{name}:{category}");
+            if !db::model::check_model_name(&conn, &model_name) {
+                whatever!(
+                    "The provided model name is not in the local registry. Please check the model name or try to update the local registry."
+                );
+            }
+            Ok((model_name, category))
+        }
+    }
+}
 pub(crate) async fn try_update_model_info(
     conn: Arc<Mutex<Connection>>,
     client: Client,

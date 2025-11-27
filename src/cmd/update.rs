@@ -39,8 +39,7 @@ pub async fn update_local_registry(args: UpdateArgs) {
         .expect("Couldn't build reqwest client");
     // 打开数据库文件，创建数据库并且创建配置表、模型信息表
     let sqlite_dir = data_path.join("sqlite");
-    let conn =
-        service::connection(sqlite_dir, "llama-buddy.sqlite").expect("Couldn't open sqlite file");
+    let conn = service::connection_llama_buddy_db(sqlite_dir).expect("Couldn't open sqlite file");
     // 检查一下有没有完成初始化，没有完成初始化，那么应该在完成初始化之后才能够更新
     if !service::init::check_init_completed(Arc::clone(&conn))
         .await

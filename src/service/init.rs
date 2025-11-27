@@ -5,7 +5,7 @@ use tokio::sync::Mutex;
 
 pub(crate) async fn check_init_completed(conn: Arc<Mutex<Connection>>) -> Result<bool, Whatever> {
     let conn = conn.lock().await;
-    db::check_init_completed(&conn)
+    db::check_llama_buddy_init_completed(&conn)
 }
 
 pub(crate) async fn completed_init(

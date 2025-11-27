@@ -6,11 +6,10 @@ use tokio::sync::Mutex;
 pub(crate) mod init;
 pub(crate) mod model;
 
-pub(crate) fn connection(
+pub(crate) fn connection_llama_buddy_db(
     path: impl AsRef<Path>,
-    db_name: impl AsRef<str>,
 ) -> Result<Arc<Mutex<Connection>>, Whatever> {
-    let conn = db::open(path, db_name)?;
+    let conn = db::open_llama_buddy_db(path)?;
     let conn = Arc::new(Mutex::new(conn));
     Ok(conn)
 }
