@@ -3,7 +3,7 @@ use rusqlite::Connection;
 use snafu::{ResultExt, ensure_whatever};
 use std::{fs::create_dir_all, path::Path};
 
-const INIT_LLAMA_BUDDY_DB_SQL: &str = include_str!("schema.sql");
+const INIT_LLAMA_BUDDY_DB_SQL: &str = include_str!("llama_buddy_schema.sql");
 
 /// 获取数据库连接
 pub fn open_llama_buddy_db(path: impl AsRef<Path>) -> Result<Connection, Whatever> {
