@@ -70,6 +70,8 @@ const SET_PULL_STATUS: &str =
 
 const QUERY_PULL_STATUS: &str = r#"select pull_status from model where name = ?1;"#;
 
+const QUERY_MODEL_PATH_TEMPLATE: &str = r#"select path, template from model where name = ?1;"#;
+
 // 插入 model 信息
 #[derive(Eq, PartialEq, Clone, Default, Debug)]
 pub(crate) struct ModelInfo {
@@ -185,7 +187,7 @@ pub fn insert_model_info(conn: &mut Connection, info: ModelInfo) -> Result<bool,
         );
         return rollback_and_return(tx);
     }
-    let digest = digest(&info.html_raw.as_bytes());
+    let digest = digest(info.html_raw.as_bytes());
     let result = tx.execute(
         INSERT_INTO_LIBRARY_RAW_DATA,
         (&info.href, &digest, &info.html_raw, &now),
@@ -248,6 +250,19 @@ pub fn get_first_model_name(conn: &Connection, name: impl AsRef<str>) -> Result<
     let name = name.as_ref();
     conn.query_one(QUERY_FIRST_MODEL_NAME, [name], |r| r.get::<_, String>(0))
         .with_whatever_context(|_| "Failed to get first model name")
+}
+
+pub fn get_model_params(
+    conn: &Connection,
+    name: impl AsRef<str>,
+) -> Result<(Option<String>, Option<String>), Whatever> {
+    let name = name.as_ref();
+    conn.query_one(QUERY_MODEL_PATH_TEMPLATE, [name], |r| {
+        let path = r.get::<_, String>(0).ok();
+        let template = r.get::<_, String>(1).ok();
+        Ok((path, template))
+    })
+    .with_whatever_context(|_| "Failed to get model params")
 }
 
 pub fn save_model_file_path(

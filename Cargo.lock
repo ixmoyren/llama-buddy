@@ -1696,6 +1696,7 @@ dependencies = [
     "clap",
     "http-extra",
     "llama-buddy-macro",
+    "llama-cpp",
     "reqwest",
     "rusqlite",
     "rustyline",

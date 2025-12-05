@@ -1,15 +1,15 @@
-extern crate core;
-
 mod cmd;
 mod config;
 mod db;
 mod error;
 mod service;
+mod utils;
 
 use crate::cmd::{
     config::output,
     init::{InitArgs, init_local_registry},
     pull::{PullArgs, pull_model_from_registry},
+    simple_run::{SimpleRunArgs, simple_run_a_model},
     update::{UpdateArgs, update_local_registry},
 };
 use clap::{
@@ -42,10 +42,11 @@ enum Commands {
     Pull(PullArgs),
     #[command(about = "Update local registry")]
     Update(UpdateArgs),
+    #[command(about = "Simple run a model")]
+    SimpleRun(SimpleRunArgs),
     // 列出可用的模型 list
     // 展示模型详细信息 show
     // 查找模型 search
-    // 简单启动模型 simple_run
 }
 
 #[tokio::main]
@@ -58,5 +59,6 @@ async fn main() {
         Commands::Init(args) => init_local_registry(args).await,
         Commands::Pull(args) => pull_model_from_registry(args).await,
         Commands::Update(args) => update_local_registry(args).await,
+        Commands::SimpleRun(args) => simple_run_a_model(args).await,
     }
 }

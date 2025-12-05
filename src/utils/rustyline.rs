@@ -15,6 +15,20 @@ use std::{
     path::Path,
 };
 
+pub type ReadLine = Editor<RustyLineHelper, SQLiteHistory>;
+
+pub trait EditorExt {
+    fn colored_prompt(&mut self, prompt: impl ToString);
+}
+
+impl EditorExt for ReadLine {
+    fn colored_prompt(&mut self, prompt: impl ToString) {
+        self.helper_mut()
+            .expect("Line editor no helper")
+            .colored_prompt = prompt.to_string();
+    }
+}
+
 pub fn new_rustyline(path: impl AsRef<Path>) -> Editor<RustyLineHelper, SQLiteHistory> {
     let config = rustyline::Config::builder()
         .history_ignore_space(true)

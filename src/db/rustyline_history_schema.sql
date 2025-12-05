@@ -13,33 +13,32 @@ DROP TABLE IF EXISTS fts;
 CREATE VIRTUAL TABLE IF NOT EXISTS fts USING fts5
 (
     entry,
-    content = 'history',
-    tokenize = 'jieba'
+    content = 'history'
 );
 -- 为倒排索引创建触发器
 CREATE TRIGGER IF NOT EXISTS history_bu
     BEFORE UPDATE
     ON history
 BEGIN
-    DELETE FROM fts WHERE docid = old.rowid;
+    DELETE FROM fts WHERE rowid = old.rowid;
 END;
 CREATE TRIGGER IF NOT EXISTS history_bd
     BEFORE DELETE
     ON history
 BEGIN
-    DELETE FROM fts WHERE docid = old.rowid;
+    DELETE FROM fts WHERE rowid = old.rowid;
 END;
 CREATE TRIGGER IF NOT EXISTS history_au
     AFTER UPDATE
     ON history
 BEGIN
-    INSERT INTO fts (docid, entry) VALUES (new.rowid, new.entry);
+    INSERT INTO fts (rowid, entry) VALUES (new.rowid, new.entry);
 END;
 CREATE TRIGGER IF NOT EXISTS history_ai
     AFTER INSERT
     ON history
 BEGIN
-    INSERT INTO fts (docid, entry) VALUES (new.rowid, new.entry);
+    INSERT INTO fts (rowid, entry) VALUES (new.rowid, new.entry);
 END;
 PRAGMA user_version = 2;
 COMMIT;

@@ -32,6 +32,7 @@ edition = { workspace = true }
 clap = { workspace = true }
 http-extra = { workspace = true }
 llama-buddy-macro = { workspace = true }
+llama-cpp = { path = "crates/llama-cpp" }
 reqwest = { workspace = true }
 rusqlite = { workspace = true, features = ["chrono", "uuid"] }
 rustyline = { workspace = true, features = ["with-sqlite-history", "with-fuzzy"] }
