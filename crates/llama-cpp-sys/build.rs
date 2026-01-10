@@ -214,7 +214,7 @@ fn macos_link_search_path() -> String {
         .output()
         .expect("Failed to run 'clang --print-search-dirs'");
     if !output.status.success() {
-        panic!("failed to run 'clang --print-search-dirs', continuing without a link search path")
+        panic!("Failed to run 'clang --print-search-dirs', continuing without a link search path")
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -225,7 +225,7 @@ fn macos_link_search_path() -> String {
         }
     }
 
-    panic!("failed to determine the link search path, continuing without it")
+    panic!("Failed to determine the link search path, continuing without it")
 }
 
 /// 设置 rustc 链接到 LLAMA.CPP 的编译产物
