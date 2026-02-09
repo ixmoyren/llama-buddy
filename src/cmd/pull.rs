@@ -14,9 +14,41 @@ use http_extra::{download, download::DownloadParam, retry, sha256::checksum};
 use reqwest::Client;
 use rusqlite::Connection;
 use serde::Deserialize;
-use std::path::PathBuf;
+use std::{
+    fs::{File, OpenOptions, TryLockError, create_dir_all, remove_file},
+    path::{Path, PathBuf},
+};
 use tracing::{debug, info};
 use url::Url;
+
+struct FileLock {
+    path: PathBuf,
+    lock: File,
+}
+
+impl FileLock {
+    pub fn new(path: impl AsRef<Path>) -> Self {
+        let path = path.as_ref().join(".lock");
+        let lock = OpenOptions::new()
+            .truncate(true)
+            .create(true)
+            .write(true)
+            .open(&path)
+            .expect("Couldn't open the lock file");
+        Self { path, lock }
+    }
+
+    pub fn try_lock(&self) -> Result<(), TryLockError> {
+        self.lock.try_lock()
+    }
+}
+
+impl Drop for FileLock {
+    fn drop(&mut self) {
+        self.lock.unlock().unwrap();
+        remove_file(&self.path).unwrap();
+    }
+}
 
 pub async fn pull_model_from_registry(args: PullArgs) {
     let PullArgs {
@@ -55,6 +87,22 @@ pub async fn pull_model_from_registry(args: PullArgs) {
         .expect("Couldn't get model name and category");
     // 获取模型所在目录
     let dir = data_path.join("model").join(&model_name);
+    if !dir.exists() {
+        create_dir_all(&dir).expect("Couldn't create the model directory");
+    }
+    // 获取锁，只允许一个进程进行下载，避免多进程下载导致文件写入失败
+    let file_lock = FileLock::new(&dir);
+    match file_lock.try_lock() {
+        Ok(_) => (),
+        Err(TryLockError::WouldBlock) => {
+            panic!(
+                "The file is locked, uultiple processes are not allowed to pull the model file simultaneously,please wait"
+            )
+        }
+        Err(TryLockError::Error(e)) => {
+            panic!("Couldn't lock the file, {e}");
+        }
+    }
     // 获取下载 Model 时 HTTP client 的配置
     let client_config = if let Some(new) = http_client_config {
         model_http_client_config.merge(new)
