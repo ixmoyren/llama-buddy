@@ -24,8 +24,8 @@ pub fn open_llama_buddy_db(path: impl AsRef<Path>) -> Result<Connection, Whateve
     let conn = Connection::open(db_path)
         .with_whatever_context(|_| format!("Couldn't open db in the {}", path.display()))?;
     // 加载 tokenizer
-    sqlite_simple_tokenizer::load(&conn)
-        .with_whatever_context(|_| "Couldn't load sqlite_simple_tokenizer")?;
+    sqlite_jieba_tokenizer::load(&conn)
+        .with_whatever_context(|_| "Couldn't load sqlite_jieba_tokenizer")?;
     check_llama_buddy_schema(&conn).with_whatever_context(|_| "Couldn't check schema")?;
     Ok(conn)
 }

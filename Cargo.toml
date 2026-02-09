@@ -11,9 +11,9 @@ license = "MIT OR Apache-2.0"
 clap = { version = "4.5.51", features = ["derive", "wrap_help"] }
 llama-buddy-macro = { path = "crates/llama-buddy-macro" }
 http-extra = { path = "crates/http-extra" }
-reqwest = { version = "0.12", default-features = false, features = ["http2", "macos-system-configuration", "charset", "cookies", "socks", "hickory-dns", "rustls-tls"] }
-rusqlite = { version = "0.37.0", default-features = true, features = ["bundled"] }
-rustyline = { version = "17.0.2", default-features = false, features = ["derive", "custom-bindings", "with-dirs"] }
+reqwest = { version = "0.13.2", default-features = false, features = ["default-tls", "charset", "http2", "system-proxy", "cookies", "hickory-dns"] }
+rusqlite = { version = "0.38.0", default-features = true, features = ["bundled"] }
+rustyline = { git = "https://github.com/kkawakam/rustyline.git", default-features = false, features = ["derive", "custom-bindings", "with-dirs"] }
 sys-extra = { path = "crates/sys-extra", default-features = false }
 serde = { version = "1.0.228", default-features = false }
 serde_json = { version = "1.0.145", default-features = false }
@@ -36,8 +36,8 @@ llama-cpp = { path = "crates/llama-cpp" }
 reqwest = { workspace = true }
 rusqlite = { workspace = true, features = ["chrono", "uuid"] }
 rustyline = { workspace = true, features = ["with-sqlite-history", "with-fuzzy"] }
-sqlite-simple-tokenizer = "0.3.4"
-scraper = "0.24.0"
+sqlite-jieba-tokenizer = "0.5.0"
+scraper = "0.25.0"
 serde = { workspace = true }
 serde_json = { workspace = true }
 snafu = { workspace = true }

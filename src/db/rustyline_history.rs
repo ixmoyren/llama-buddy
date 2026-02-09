@@ -32,7 +32,7 @@ pub fn change_rustyline_history_scheme(db_path: impl AsRef<Path>) -> Result<(), 
         format!("Couldn't open db in the {}", db_path.as_ref().display())
     })?;
     // 加载 tokenizer
-    sqlite_simple_tokenizer::load(&conn)
+    sqlite_jieba_tokenizer::load(&conn)
         .with_whatever_context(|_| "Couldn't load sqlite_simple_tokenizer")?;
     let user_version = conn
         .pragma_query_value(None, "user_version", |r| r.get::<_, i32>(0))
