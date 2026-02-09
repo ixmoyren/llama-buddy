@@ -185,17 +185,17 @@ async fn save_res_to_local(
         }
     }
     // 将这个目录保存在注册表中
-    db::model::save_model_file_path(&conn, &model_name, &filepath, size, &media_type)
+    db::model::save_model_file_path(conn, model_name, &filepath, size, &media_type)
         .expect("Couldn't save model file path and size");
 }
 
-fn need_retry_download(filepath: &PathBuf, digest: &String) -> bool {
+fn need_retry_download(filepath: &PathBuf, digest: &str) -> bool {
     // 文件不存在，重新下载
     if !filepath.exists() {
         return true;
     }
     // 文件存在，判断一下文件的摘要，摘要不一样，重新下载
-    let Ok(checksum) = checksum(&filepath, digest.replace("sha256:", "")) else {
+    let Ok(checksum) = checksum(filepath, digest.replace("sha256:", "")) else {
         // 没有办法校验摘要，那么重新下载
         return true;
     };
@@ -209,11 +209,8 @@ fn file_name(
 ) -> Option<(String, String)> {
     let digest = digest.as_ref();
     let media_type = media_type.as_ref();
-    let Some((media, file_type)) =
-        db::config::get_media_type(conn, media_type).expect("No media type")
-    else {
-        return None;
-    };
+    let (media, file_type) =
+        db::config::get_media_type(conn, media_type).expect("No media type")?;
     Some((format!("{media}-{digest}.{file_type}"), media))
 }
 
